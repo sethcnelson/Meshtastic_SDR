@@ -6,6 +6,7 @@ import time
 
 from packet import Packet
 from util import compute_channel_hash
+from db import init_db, upsert_node, log_traffic, resolve_name, close_db
 
 #reads keys from file called 'keys'
 parser = argparse.ArgumentParser(description = "Process incoming command parmeters")
@@ -83,13 +84,47 @@ def handle_packet(pkt = None):
     
     if decrypted:
         pkt_hash = packet.get_channel_hash()
-        resolved = channel_map.get(pkt_hash)
-        if resolved:
-            print(f"[INFO] channel: {resolved}")
+        channel_name = channel_map.get(pkt_hash)
+        if channel_name:
+            print(f"[INFO] channel: {channel_name}")
         else:
             print(f"[INFO] channel: unknown (hash: {pkt_hash})")
 
         message = packet.get_message()
+
+        # Upsert node info before resolving names so the name is immediately available
+        if message.type == "NODEINFO_APP" and isinstance(message.data, dict):
+            info = message.data
+            upsert_node(
+                node_id=packet.get_source(),
+                long_name=info.get("long_name"),
+                short_name=info.get("short_name"),
+                hw_model=info.get("hw_model"),
+                role=info.get("role"),
+                public_key=info.get("public_key"),
+                timestamp=packet.get_timestamp(),
+            )
+
+        # Display resolved names
+        src_name = resolve_name(packet.get_source())
+        dst_name = resolve_name(packet.get_dest())
+        print(f"[INFO] from: {src_name}")
+        print(f"[INFO] to:   {dst_name}")
+
+        # Log traffic to database
+        log_traffic(
+            timestamp=packet.get_timestamp(),
+            source_id=packet.get_source(),
+            dest_id=packet.get_dest(),
+            packet_id=packet.get_packet_id(),
+            channel_hash=pkt_hash,
+            channel_name=channel_name,
+            port_num=getattr(message, 'portnum', None),
+            msg_type=message.type,
+            data=getattr(message, 'data', None),
+            key_used=key,
+        )
+
         message_json = message.to_json()
         if isinstance(message_json, str):
             message_json = json.loads(message_json)
@@ -125,6 +160,8 @@ if __name__ == "__main__":
 
     if args.save:
         save = True
+
+    init_db(debug=debug)
 
     try:
         with open("keys", "r") as file:
@@ -167,5 +204,10 @@ if __name__ == "__main__":
     else:
         print(f"[WARN] No keys loaded.")
 
-    listen_on_network(args.ip, args.port, keys)
+    try:
+        listen_on_network(args.ip, args.port, keys)
+    except KeyboardInterrupt:
+        print("\n[INFO] Shutting down...")
+    finally:
+        close_db()
 

@@ -34,7 +34,15 @@ class Message(object):
                     self.type = "NODEINFO_APP"
                     info = mesh_pb2.User()
                     info.ParseFromString(data.payload)
-                    self.data = str(info)
+                    self.data = {
+                        "id": info.id,
+                        "long_name": info.long_name,
+                        "short_name": info.short_name,
+                        "hw_model": info.hw_model,
+                        "role": info.role,
+                    }
+                    if info.public_key:
+                        self.data["public_key"] = info.public_key.hex()
 
                 case 5 : # ROUTING_APP
                     self.type = "ROUTING_APP"
