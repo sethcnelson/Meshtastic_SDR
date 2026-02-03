@@ -848,12 +848,11 @@
     // ── Encryption Icon Helper ───────────────────────────────────────────────
     function encryptionIcon(keyUsed) {
         if (keyUsed === "public") {
-            return '<span class="lock-icon lock-public" title="Public channel (default key)">\u{1F513}</span>';
+            return '<svg class="lock-icon lock-public" title="Public channel (default key)" viewBox="0 0 16 16"><title>Public channel (default key)</title><path d="M11 5V4a3 3 0 0 0-6 0v1" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/></svg>';
         }
         if (keyUsed === "private") {
-            return '<span class="lock-icon lock-private" title="Private channel (encrypted)">\u{1F512}</span>';
+            return '<svg class="lock-icon lock-private" title="Private channel (encrypted)" viewBox="0 0 16 16"><title>Private channel (encrypted)</title><path d="M5 7V4a3 3 0 0 1 6 0v3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/></svg>';
         }
-        // Old records that still have raw key data or null
         return "";
     }
 

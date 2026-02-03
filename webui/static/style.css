@@ -568,9 +568,12 @@ tr:hover td {
 /* ── Encryption Lock Icons ──────────────────────────────────────────────── */
 
 .lock-icon {
-    font-size: 12px;
+    display: inline-block;
+    width: 12px;
+    height: 12px;
     vertical-align: middle;
     cursor: default;
+    flex-shrink: 0;
 }
 
 .lock-public {
