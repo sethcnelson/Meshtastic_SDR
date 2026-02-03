@@ -6,6 +6,7 @@ import time
 
 from packet import Packet
 
+#reads keys from file called 'keys'
 parser = argparse.ArgumentParser(description = "Process incoming command parmeters")
 parser.add_argument("ip", action = "store", help = "IP Address.")
 parser.add_argument("port", action = "store", help = "Port")
@@ -53,10 +54,10 @@ def handle_packet(pkt = None):
     packet = Packet(pkt)
 
     print("-" * 20, " PACKET ", "-" * 20)
-    print(f"[INFO] Received @ {packet.get_timestamp()}")
+    print(f"[INFO] timestamp: {packet.get_timestamp()}")
 
     if save:
-        print(f"[INFO] Saving...")
+        print(f"[INFO] Saving, as requested...")
         packet.save()
     
     if debug:
@@ -69,30 +70,36 @@ def handle_packet(pkt = None):
     
     decrypted = False
 
-    print(f"[INFO] Attempting to decrypt...")
+    #print(f"[INFO] Attempting to decrypt...")
     for key in keys:
         try:
             decrypted = packet.decrypt(key)
+            print("[INFO] key: ", key)
             break
         except Exception as e:
             continue
     
     if decrypted:
+        #print("[INFO] Decrypted successfully:")
         message = packet.get_message()
-        print(message.to_json())
+        print("message:", message.to_json())
     else:
-        print("[INFO] Failed :(")
+        print("[WARN] no suitable key!")
 
     print("-" * 50)
 
 def listen_on_network(ip = None, port = None, keys = []):
     if not ip or not port:
         raise Exception("Missing IP or Port!")
+    if not keys:
+        raise Exception("Missing keys- check 'key' file and add one or more entries!")
 
     context = zmq.Context()
     socket = context.socket(zmq.SUB)
     socket.connect("tcp://" + ip + ":" + port)
     socket.setsockopt(zmq.SUBSCRIBE, b'')
+
+    print(f"Socket <tcp://{ip}:{port}> listening...")
 
     while True:
         if socket.poll(10) != 0:
