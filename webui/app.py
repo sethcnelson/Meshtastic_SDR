@@ -70,7 +70,7 @@ def api_traffic():
 
     query = (
         f"SELECT id, timestamp, source_id, source_name, dest_id, dest_name, "
-        f"       packet_id, channel_hash, channel_name, port_num, msg_type, data "
+        f"       packet_id, channel_hash, channel_name, port_num, msg_type, data, key_used "
         f"FROM traffic {where} ORDER BY id DESC LIMIT ?"
     )
     params.append(limit)
@@ -152,7 +152,7 @@ def api_watchlist():
         # Last 5 traffic entries involving this node
         traffic_rows = db_conn.execute(
             "SELECT id, timestamp, source_id, source_name, dest_id, dest_name, "
-            "       packet_id, channel_hash, channel_name, port_num, msg_type, data "
+            "       packet_id, channel_hash, channel_name, port_num, msg_type, data, key_used "
             "FROM traffic "
             "WHERE source_id = ? OR dest_id = ? "
             "ORDER BY id DESC LIMIT 5",

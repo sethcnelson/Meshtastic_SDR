@@ -565,6 +565,22 @@ tr:hover td {
     margin-left: 4px;
 }
 
+/* ── Encryption Lock Icons ──────────────────────────────────────────────── */
+
+.lock-icon {
+    font-size: 12px;
+    vertical-align: middle;
+    cursor: default;
+}
+
+.lock-public {
+    color: var(--orange);
+}
+
+.lock-private {
+    color: var(--green);
+}
+
 .watchlist-card-traffic {
     border-top: 1px solid var(--border);
     padding-top: 6px;

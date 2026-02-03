@@ -583,8 +583,10 @@
                 } catch (e) {}
             }
 
+            var lockHtml = encryptionIcon(r.key_used);
+
             return "<tr>" +
-                "<td>" + fmtTime(r.timestamp) + "</td>" +
+                "<td>" + lockHtml + " " + fmtTime(r.timestamp) + "</td>" +
                 "<td>" + srcDisplay + "</td>" +
                 "<td>" + dstDisplay + "</td>" +
                 '<td><span class="badge ' + badgeClass(r.msg_type) + '">' + esc(r.msg_type) + '</span>' + pinHtml + '</td>' +
@@ -690,7 +692,9 @@
                         } else {
                             dataHtml = '<span class="watchlist-traffic-data">' + esc(raw) + '</span>';
                         }
+                        var tLock = encryptionIcon(t.key_used);
                         return '<div class="watchlist-traffic-entry">' +
+                            tLock +
                             '<span class="watchlist-traffic-time">' + fmtTime(t.timestamp) + '</span>' +
                             '<span class="badge ' + badgeClass(t.msg_type) + '">' + esc(t.msg_type) + '</span>' +
                             dataHtml + posLink +
@@ -839,6 +843,18 @@
                 panToNode(lat, lng, nodeId);
             });
         });
+    }
+
+    // ── Encryption Icon Helper ───────────────────────────────────────────────
+    function encryptionIcon(keyUsed) {
+        if (keyUsed === "public") {
+            return '<span class="lock-icon lock-public" title="Public channel (default key)">\u{1F513}</span>';
+        }
+        if (keyUsed === "private") {
+            return '<span class="lock-icon lock-private" title="Private channel (encrypted)">\u{1F512}</span>';
+        }
+        // Old records that still have raw key data or null
+        return "";
     }
 
     // ── Position Precision Helper ────────────────────────────────────────────
