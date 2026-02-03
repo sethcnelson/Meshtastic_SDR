@@ -382,6 +382,11 @@ tr:hover td {
 
 /* ── Unnamed Node ────────────────────────────────────────────────────────── */
 
+.node-unnamed-id {
+    color: var(--orange);
+    font-family: var(--font-mono);
+}
+
 .node-unnamed {
     color: var(--text-muted);
     font-style: italic;

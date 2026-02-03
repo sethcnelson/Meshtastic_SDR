@@ -265,8 +265,9 @@
         if (longName || shortName) {
             return esc(longName || shortName);
         }
-        // No name resolved — show node ID with muted label
-        return esc(nodeId) + ' <span class="node-unnamed">(no name)</span>';
+        // No name resolved — show hex User ID with unresolved label
+        return '<span class="node-unnamed-id">' + esc(nodeId) + '</span>' +
+            ' <span class="node-unnamed">(unresolved)</span>';
     }
 
     // ── Nodes ────────────────────────────────────────────────────────────────
@@ -278,7 +279,7 @@
                     node_id: n.node_id,
                     long_name: n.long_name,
                     short_name: n.short_name,
-                    cols: [n.node_id, n.long_name || n.short_name || "", hw, n.first_seen || "", n.last_seen || ""],
+                    cols: [n.node_id, n.long_name || n.short_name || n.node_id, hw, n.first_seen || "", n.last_seen || ""],
                     hw: hw,
                     first_seen: n.first_seen,
                     last_seen: n.last_seen
@@ -415,10 +416,10 @@
             var r = item._raw;
             var srcDisplay = r.source_name
                 ? esc(r.source_name)
-                : (r.source_id ? esc(r.source_id) + ' <span class="node-unnamed">(no name)</span>' : "\u2014");
+                : (r.source_id ? '<span class="node-unnamed-id">' + esc(r.source_id) + '</span> <span class="node-unnamed">(unresolved)</span>' : "\u2014");
             var dstDisplay = r.dest_name
                 ? esc(r.dest_name)
-                : (r.dest_id ? esc(r.dest_id) + ' <span class="node-unnamed">(no name)</span>' : "\u2014");
+                : (r.dest_id ? '<span class="node-unnamed-id">' + esc(r.dest_id) + '</span> <span class="node-unnamed">(unresolved)</span>' : "\u2014");
             var dataStr = truncate(r.data || "", 60);
             return "<tr>" +
                 "<td>" + fmtTime(r.timestamp) + "</td>" +
@@ -532,7 +533,7 @@
                 if (p.source_name) {
                     nameHtml = "<b>" + esc(p.source_name) + "</b>";
                 } else {
-                    nameHtml = "<b>" + esc(p.source_id) + '</b> <span class="node-unnamed">(no name)</span>';
+                    nameHtml = '<b class="node-unnamed-id">' + esc(p.source_id) + '</b> <span class="node-unnamed">(unresolved)</span>';
                 }
                 var popup = nameHtml + "<br>" +
                     esc(p.source_id) + "<br>" +
