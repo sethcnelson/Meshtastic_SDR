@@ -154,9 +154,9 @@ if __name__ == "__main__":
         else:
             keys.append(valid_key)
 
-            # Build channel hash mapping using the original (unexpanded) key for hash computation
+            # Build channel hash mapping using the expanded key (firmware hashes the full key)
             channel_name = name if name else preset
-            h = compute_channel_hash(channel_name, raw_key)
+            h = compute_channel_hash(channel_name, valid_key)
             channel_map[h] = channel_name
 
             if debug:
