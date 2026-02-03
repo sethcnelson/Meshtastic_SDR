@@ -275,6 +275,17 @@ header h1 {
     margin: 10px 12px;
 }
 
+.popup-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.popup-star {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
 /* Light map theme popup overrides */
 body.map-light .leaflet-popup-content-wrapper,
 body.map-satellite .leaflet-popup-content-wrapper,

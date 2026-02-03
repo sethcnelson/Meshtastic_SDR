@@ -96,6 +96,21 @@
         map = L.map("map", { zoomControl: true }).setView([39.8, -98.5], 4);
         setMapTheme(savedTheme);
 
+        // Wire up star buttons inside map popups
+        map.on("popupopen", function (e) {
+            var btn = e.popup.getElement().querySelector(".popup-star");
+            if (btn) {
+                btn.addEventListener("click", function () {
+                    var nodeId = this.getAttribute("data-node");
+                    toggleWatch(nodeId);
+                    // Update the star in the open popup
+                    var starred = watchList.indexOf(nodeId) !== -1;
+                    this.textContent = starred ? "\u2605" : "\u2606";
+                    this.className = (starred ? "star-btn starred" : "star-btn") + " popup-star";
+                });
+            }
+        });
+
         // Set theme dropdown to saved value
         var themeSelect = document.getElementById("map-theme");
         themeSelect.value = savedTheme;
@@ -528,14 +543,18 @@
                 var latlng = [p.latitude, p.longitude];
                 bounds.push(latlng);
 
-                var label = p.source_name || p.source_id;
                 var nameHtml;
                 if (p.source_name) {
                     nameHtml = "<b>" + esc(p.source_name) + "</b>";
                 } else {
                     nameHtml = '<b class="node-unnamed-id">' + esc(p.source_id) + '</b> <span class="node-unnamed">(unresolved)</span>';
                 }
-                var popup = nameHtml + "<br>" +
+                var isStarred = watchList.indexOf(p.source_id) !== -1;
+                var starChar = isStarred ? "\u2605" : "\u2606";
+                var starClass = isStarred ? "star-btn starred" : "star-btn";
+                var popup = '<div class="popup-header">' +
+                    '<button class="' + starClass + ' popup-star" data-node="' + esc(p.source_id) + '">' + starChar + '</button> ' +
+                    nameHtml + '</div>' +
                     esc(p.source_id) + "<br>" +
                     p.latitude.toFixed(5) + ", " + p.longitude.toFixed(5) + "<br>" +
                     "<small>" + fmtTime(p.timestamp) + "</small>";
