@@ -274,7 +274,7 @@
     function fetchNodes() {
         fetchJSON("/api/nodes", function (rows) {
             nodesData = rows.map(function (n) {
-                var hw = HW_MODELS[n.hw_model] || ("ID " + n.hw_model);
+                var hw = n.hw_model != null ? (HW_MODELS[n.hw_model] || ("ID " + n.hw_model)) : "\u2014";
                 return {
                     node_id: n.node_id,
                     long_name: n.long_name,
@@ -463,7 +463,7 @@
             container.innerHTML = items.map(function (item) {
                 var node = item.node || {};
                 var nameHtml = displayNodeName(node.long_name, node.short_name, node.node_id);
-                var hw = HW_MODELS[node.hw_model] || ("ID " + (node.hw_model || "?"));
+                var hw = node.hw_model != null ? (HW_MODELS[node.hw_model] || ("ID " + node.hw_model)) : "\u2014";
                 var lastSeen = node.last_seen ? fmtTime(node.last_seen) : "\u2014";
 
                 var posHtml = "";
