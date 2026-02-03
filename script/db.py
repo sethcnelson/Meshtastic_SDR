@@ -45,36 +45,6 @@ def init_db(debug=False):
     """)
     _conn.commit()
 
-    # Migrate: replace stored raw keys with "public" or "private" labels
-    _migrate_key_used()
-
-
-# The default Meshtastic public key (AQ== expanded to full base64)
-_DEFAULT_KEY = "1PG7OiApB1nwvP+rz05pAQ=="
-
-
-def _migrate_key_used():
-    """One-time migration: convert raw key strings in key_used to 'public' or 'private'."""
-    # Check if any rows still have raw key data (not already migrated)
-    row = _conn.execute(
-        "SELECT COUNT(*) FROM traffic "
-        "WHERE key_used IS NOT NULL AND key_used NOT IN ('public', 'private')"
-    ).fetchone()
-    if row[0] == 0:
-        return
-
-    # Mark default key traffic as public
-    _conn.execute(
-        "UPDATE traffic SET key_used = 'public' WHERE key_used = ?",
-        (_DEFAULT_KEY,)
-    )
-    # Mark everything else that isn't already labeled as private
-    _conn.execute(
-        "UPDATE traffic SET key_used = 'private' "
-        "WHERE key_used IS NOT NULL AND key_used NOT IN ('public', 'private')"
-    )
-    _conn.commit()
-
 
 def upsert_node(node_id, long_name=None, short_name=None, hw_model=None, role=None, public_key=None, timestamp=None):
     if _conn is None:
