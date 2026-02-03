@@ -8,8 +8,8 @@ from packet import Packet
 from util import compute_channel_hash
 from db import init_db, upsert_node, log_traffic, resolve_name, close_db
 
-# The default Meshtastic public key (AQ== expanded)
-DEFAULT_KEY = "1PG7OiApB1nwvP+rz05pAQ=="
+# The default Meshtastic public key bytes (AQ== expanded)
+DEFAULT_KEY_BYTES = base64.b64decode("1PG7OiApB1nwvP+rz05pAQ==")
 
 #reads keys from file called 'keys'
 parser = argparse.ArgumentParser(description = "Process incoming command parmeters")
@@ -115,7 +115,11 @@ def handle_packet(pkt = None):
         print(f"[INFO] to:   {dst_name}")
 
         # Log traffic to database — record channel type, not the actual key
-        encryption_type = "public" if key == DEFAULT_KEY else "private"
+        try:
+            is_public = base64.b64decode(key) == DEFAULT_KEY_BYTES
+        except Exception:
+            is_public = False
+        encryption_type = "public" if is_public else "private"
         log_traffic(
             timestamp=packet.get_timestamp(),
             source_id=packet.get_source(),
