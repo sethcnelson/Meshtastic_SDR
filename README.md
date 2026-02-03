@@ -9,15 +9,48 @@
 ## Original
 This is a GnuRadio SDR project to fully build a RX and TX stack for Meshtastic.
 
-To run:
+## Installation
 
-1. Clone repo to local machine with " git clone https://gitlab.com/sethcnelson/meshtastic_sdr "
+1. Clone repo to local machine with `git clone https://github.com/sethcnelson/Meshtastic_SDR.git`
 2. Install Gnuradio and associated plugins.
 3. Install the Meshtastic Python with "pip3 install meshtastic"
 4. Clone and install https://github.com/tapparelj/gr-lora_sdr 
 5. Open in ./meshtastic_sdr/gnuradio scripts/RX/ your relevant area and presets you want to monitor. RTLSDR has ~2.5mhz usable bandwidth so can be used with all but the Meshtastic_US_allPresets.grc as that requires 20MHz (like a HackRF One)
 6. Run the flow in GnuRadio. NOTE: the flows emit data AS A server to TCP ports. Looking at the block "ZMQ PUB Sink" you can see the ports are from 20000-20007. 
-7. Run the python3 program with "python3 main.py ip <SERVER> port <PORT>"
+7. Run the python3 program with `python3 main.py ip <SERVER> port <PORT> --preset <LongFast/MediumFast/etc>`
+
+## Test setup
+
+1. Create docker container with debian:latest image, mount a volume to access the setup script, and map a port for the webui (5000)
+2. Initialize the container, execute the setup.sh script to install all dependancies and build gr-lora_sdr from source, clone this repo, etc.
+3. Compile the GNU Radio script for headless use
+```bash
+cd Meshtastic_SDR/gnuradio
+grcc Meshtastic_US_250KHz_RTLSDR_headless.grc
+```
+4. Launch tmux and in one session start the GNU Radio process
+```bash
+python3 Meshtastic_250KHz_all_headless.py
+```
+5. In another session start decoder
+```bash
+cd ../script
+python3 main.py ip <SERVER> port <PORT> --preset <LongFast/MediumFast/etc>
+```
+6. In another session run webui host
+```bash
+cd ../webui
+python3 app.py
+```
+
+## tmux Quick Reference:
+
+- `Ctrl+b` then `"` - Split horizontally
+- `Ctrl+b` then `%` - Split vertically
+- `Ctrl+b` then arrow keys - Switch between panes
+- `Ctrl+b` then `d` - Detach (keeps running)
+- `tmux attach` - Reattach later
+- `Ctrl+b` then `x` - Close current pane
 
 ~~The program also accepts individual packets of data with "python3 meshtastic_gnuradio_decoder.py -i <data>" ~~
 

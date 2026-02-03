@@ -24,8 +24,9 @@ NC='\033[0m' # No Color
 # Configuration
 INSTALL_DIR="$HOME/meshtastic_sdr_install"
 GR_LORA_SDR_REPO="https://github.com/tapparelj/gr-lora_sdr.git"
-MESHTASTIC_SDR_REPO="https://gitlab.com/crankylinuxuser/meshtastic_sdr.git"
-ENHANCED_DECODER_REPO="https://github.com/tom-acco/Meshtastic_SDR.git"
+MESHTASTIC_SDR_REPO="https://github.com/sethcnelson/Meshtastic_SDR.git"
+#OLD_MESHTASTIC_SDR_REPO="https://gitlab.com/crankylinuxuser/meshtastic_sdr.git"
+#ENHANCED_DECODER_REPO="https://github.com/tom-acco/Meshtastic_SDR.git"
 
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
@@ -122,7 +123,7 @@ if ldconfig -p | grep -q lora_sdr; then
     fi
 fi
 
-if [ -d "$INSTALL_DIR/meshtastic_sdr" ]; then
+if [ -d "$INSTALL_DIR/Meshtastic_SDR" ]; then
     print_warning "Meshtastic_SDR directory already exists"
     MESHTASTIC_INSTALLED=true
     read -p "Re-clone Meshtastic_SDR repositories? (y/n) " -n 1 -r
@@ -159,7 +160,9 @@ if [ "$GNURADIO_INSTALLED" = false ]; then
         python3-zmq \
         libsndfile1-dev \
         libfftw3-dev \
-        libvolk-dev
+        libvolk-dev \
+        tmux \
+        nano
 
     print_success "Core dependencies installed"
 
@@ -176,7 +179,7 @@ if [ "$GNURADIO_INSTALLED" = false ]; then
     print_success "GNU Radio installed"
 
     # Install SDR hardware support
-    print_header "Installing SDR Support (RTL-SDR)"
+    print_header "Installing SDR Support (RTL-SDR + SoapySDR)"
     sudo DEBIAN_FRONTEND=noninteractive apt install -y \
         -o Dpkg::Options::="--force-confdef" \
         -o Dpkg::Options::="--force-confold" \
@@ -186,9 +189,12 @@ if [ "$GNURADIO_INSTALLED" = false ]; then
         librtlsdr-dev \
         libusb-1.0-0 \
         libusb-1.0-0-dev \
-        usbutils
+        usbutils \
+        soapysdr-tools \
+        libsoapysdr-dev \
+        soapysdr-module-rtlsdr
 
-    print_success "RTL-SDR support installed"
+    print_success "RTL-SDR and SoapySDR support installed"
 
     # Install UHD separately as it may be optional
     sudo DEBIAN_FRONTEND=noninteractive apt install -y \
@@ -291,21 +297,21 @@ fi
 
 # Install Python dependencies
 print_header "Installing Python Dependencies"
-if python3 -c "import meshtastic" 2>/dev/null; then
-    print_warning "Meshtastic Python library already installed"
-    python3 -c "import meshtastic; print('  Version: ' + meshtastic.__version__)" 2>/dev/null || true
-    read -p "Reinstall/update Python packages? (y/n) " -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        pip3 install --user --break-system-packages --upgrade meshtastic protobuf cryptography
-        print_success "Python dependencies updated"
-    else
-        print_warning "Skipping Python package installation"
-    fi
-else
-    pip3 install --user --break-system-packages meshtastic protobuf cryptography
-    print_success "Python dependencies installed"
-fi
+# if python3 -c "import meshtastic" 2>/dev/null; then
+#     print_warning "Meshtastic Python library already installed"
+#     python3 -c "import meshtastic; print('  Version: ' + meshtastic.__version__)" 2>/dev/null || true
+#     read -p "Reinstall/update Python packages? (y/n) " -n 1 -r
+#     echo ""
+#     if [[ $REPLY =~ ^[Yy]$ ]]; then
+#         pip3 install --user --break-system-packages --upgrade meshtastic protobuf cryptography flask
+#         print_success "Python dependencies updated"
+#     else
+#         print_warning "Skipping Python package installation"
+#     fi
+# else
+    pip3 install --user --break-system-packages meshtastic protobuf cryptography flask
+    print_success "Python dependencies installed/updated"
+# fi
 
 # Add ~/.local/bin to PATH if not already there
 print_header "Configuring PATH"
@@ -407,9 +413,9 @@ if [ "$MESHTASTIC_INSTALLED" = false ]; then
     print_header "Installing Meshtastic_SDR (Original)"
     cd "$INSTALL_DIR"
 
-    if [ -d "meshtastic_sdr" ]; then
-        print_warning "meshtastic_sdr directory exists, removing..."
-        rm -rf meshtastic_sdr
+    if [ -d "Meshtastic_SDR" ]; then
+        print_warning "Meshtastic_SDR directory exists, removing..."
+        rm -rf Meshtastic_SDR
     fi
 
     echo "Cloning Meshtastic_SDR repository..."
@@ -421,87 +427,87 @@ else
     cd "$INSTALL_DIR"
 fi
 
-# Clone enhanced decoder (optional)
-if [ "$MESHTASTIC_INSTALLED" = false ]; then
-    print_header "Installing Enhanced Decoder (tom-acco fork)"
-    cd "$INSTALL_DIR"
+# # Clone enhanced decoder (optional)
+# if [ "$MESHTASTIC_INSTALLED" = false ]; then
+#     print_header "Installing Enhanced Decoder (tom-acco fork)"
+#     cd "$INSTALL_DIR"
 
-    if [ -d "meshtastic_sdr_enhanced" ]; then
-        print_warning "meshtastic_sdr_enhanced directory exists, removing..."
-        rm -rf meshtastic_sdr_enhanced
-    fi
+#     if [ -d "meshtastic_sdr_enhanced" ]; then
+#         print_warning "meshtastic_sdr_enhanced directory exists, removing..."
+#         rm -rf meshtastic_sdr_enhanced
+#     fi
 
-    echo "Cloning enhanced decoder repository..."
-    git clone "$ENHANCED_DECODER_REPO" meshtastic_sdr_enhanced
-    print_success "Enhanced decoder cloned"
-else
-    print_success "Using existing enhanced decoder installation"
-fi
+#     echo "Cloning enhanced decoder repository..."
+#     git clone "$ENHANCED_DECODER_REPO" meshtastic_sdr_enhanced
+#     print_success "Enhanced decoder cloned"
+# else
+#     print_success "Using existing enhanced decoder installation"
+# fi
 
 # Create convenience scripts
-print_header "Creating Convenience Scripts"
+# print_header "Creating Convenience Scripts"
 
-# US receiver script
-if [ ! -f "$INSTALL_DIR/run_us_receiver.sh" ]; then
-    cat > "$INSTALL_DIR/run_us_receiver.sh" << 'EOF'
-#!/bin/bash
-# Launch US Meshtastic receiver for RTL-SDR
-cd "$(dirname "$0")/meshtastic_sdr/gnuradio scripts/RX"
-gnuradio-companion "Meshtastic_US_62KHz_RTLSDR.grc"
-EOF
-    chmod +x "$INSTALL_DIR/run_us_receiver.sh"
-    print_success "Created run_us_receiver.sh"
-else
-    print_warning "run_us_receiver.sh already exists, skipping"
-fi
+# # US receiver script
+# if [ ! -f "$INSTALL_DIR/run_us_receiver.sh" ]; then
+#     cat > "$INSTALL_DIR/run_us_receiver.sh" << 'EOF'
+# #!/bin/bash
+# # Launch US Meshtastic receiver for RTL-SDR
+# cd "$(dirname "$0")/Meshtastic_SDR/gnuradio"
+# gnuradio-companion "Meshtastic_US_250KHz_RTLSDR.grc"
+# EOF
+#     chmod +x "$INSTALL_DIR/run_us_receiver.sh"
+#     print_success "Created run_us_receiver.sh"
+# else
+#     print_warning "run_us_receiver.sh already exists, skipping"
+# fi
 
-# EU receiver script
-if [ ! -f "$INSTALL_DIR/run_eu_receiver.sh" ]; then
-    cat > "$INSTALL_DIR/run_eu_receiver.sh" << 'EOF'
-#!/bin/bash
-# Launch EU Meshtastic receiver for RTL-SDR
-cd "$(dirname "$0")/meshtastic_sdr/gnuradio scripts/RX"
-gnuradio-companion "Meshtastic_EU_62KHz_RTLSDR.grc"
-EOF
-    chmod +x "$INSTALL_DIR/run_eu_receiver.sh"
-    print_success "Created run_eu_receiver.sh"
-else
-    print_warning "run_eu_receiver.sh already exists, skipping"
-fi
+# # EU receiver script
+# if [ ! -f "$INSTALL_DIR/run_eu_receiver.sh" ]; then
+#     cat > "$INSTALL_DIR/run_eu_receiver.sh" << 'EOF'
+# #!/bin/bash
+# # Launch EU Meshtastic receiver for RTL-SDR
+# cd "$(dirname "$0")/meshtastic_sdr/gnuradio scripts/RX"
+# gnuradio-companion "Meshtastic_EU_62KHz_RTLSDR.grc"
+# EOF
+#     chmod +x "$INSTALL_DIR/run_eu_receiver.sh"
+#     print_success "Created run_eu_receiver.sh"
+# else
+#     print_warning "run_eu_receiver.sh already exists, skipping"
+# fi
 
-# Decoder script (original)
-if [ ! -f "$INSTALL_DIR/run_decoder.sh" ]; then
-    cat > "$INSTALL_DIR/run_decoder.sh" << 'EOF'
-#!/bin/bash
-# Run Meshtastic decoder
-# Usage: ./run_decoder.sh [port]
-# Default port is 20004 (LongFast)
-PORT=${1:-20004}
-cd "$(dirname "$0")/meshtastic_sdr/python scripts"
-python3 meshtastic_gnuradio_RX.py -n 127.0.0.1 -p "$PORT"
-EOF
-    chmod +x "$INSTALL_DIR/run_decoder.sh"
-    print_success "Created run_decoder.sh"
-else
-    print_warning "run_decoder.sh already exists, skipping"
-fi
+# # Decoder script (original)
+# if [ ! -f "$INSTALL_DIR/run_decoder.sh" ]; then
+#     cat > "$INSTALL_DIR/run_decoder.sh" << 'EOF'
+# #!/bin/bash
+# # Run Meshtastic decoder
+# # Usage: ./run_decoder.sh [port]
+# # Default port is 20004 (LongFast)
+# PORT=${1:-20004}
+# cd "$(dirname "$0")/meshtastic_sdr/python scripts"
+# python3 meshtastic_gnuradio_RX.py -n 127.0.0.1 -p "$PORT"
+# EOF
+#     chmod +x "$INSTALL_DIR/run_decoder.sh"
+#     print_success "Created run_decoder.sh"
+# else
+#     print_warning "run_decoder.sh already exists, skipping"
+# fi
 
-# Enhanced decoder script
-if [ ! -f "$INSTALL_DIR/run_enhanced_decoder.sh" ]; then
-    cat > "$INSTALL_DIR/run_enhanced_decoder.sh" << 'EOF'
-#!/bin/bash
-# Run Enhanced Meshtastic decoder (tom-acco fork)
-# Usage: ./run_enhanced_decoder.sh [port]
-# Default port is 20004 (LongFast)
-PORT=${1:-20004}
-cd "$(dirname "$0")/meshtastic_sdr_enhanced/script"
-python3 meshtastic_gnuradio_decoder.py -n 127.0.0.1 -p "$PORT"
-EOF
-    chmod +x "$INSTALL_DIR/run_enhanced_decoder.sh"
-    print_success "Created run_enhanced_decoder.sh"
-else
-    print_warning "run_enhanced_decoder.sh already exists, skipping"
-fi
+# # Enhanced decoder script
+# if [ ! -f "$INSTALL_DIR/run_enhanced_decoder.sh" ]; then
+#     cat > "$INSTALL_DIR/run_enhanced_decoder.sh" << 'EOF'
+# #!/bin/bash
+# # Run Enhanced Meshtastic decoder (tom-acco fork)
+# # Usage: ./run_enhanced_decoder.sh [port]
+# # Default port is 20004 (LongFast)
+# PORT=${1:-20004}
+# cd "$(dirname "$0")/meshtastic_sdr_enhanced/script"
+# python3 meshtastic_gnuradio_decoder.py -n 127.0.0.1 -p "$PORT"
+# EOF
+#     chmod +x "$INSTALL_DIR/run_enhanced_decoder.sh"
+#     print_success "Created run_enhanced_decoder.sh"
+# else
+#     print_warning "run_enhanced_decoder.sh already exists, skipping"
+# fi
 
 # Test RTL-SDR script
 if [ ! -f "$INSTALL_DIR/test_rtlsdr.sh" ]; then
@@ -540,12 +546,12 @@ This will verify your RTL-SDR is detected and working.
 
 For US users:
 ```bash
-./run_us_receiver.sh
+~~./run_us_receiver.sh~~
 ```
 
 For EU users:
 ```bash
-./run_eu_receiver.sh
+~~./run_eu_receiver.sh~~
 ```
 
 This will open GNU Radio Companion with the appropriate flowgraph.
@@ -555,19 +561,19 @@ Click the "Execute" (play) button to start receiving.
 
 Original decoder:
 ```bash
-./run_decoder.sh
+~~./run_decoder.sh~~
 ```
 
 Enhanced decoder (with multi-key support):
 ```bash
-./run_enhanced_decoder.sh
+~~./run_enhanced_decoder.sh~~
 ```
 
 For different Meshtastic presets, specify the port:
 ```bash
-./run_decoder.sh 20000    # ShortFast
+~~./run_decoder.sh 20000    # ShortFast
 ./run_decoder.sh 20004    # LongFast (default, most common)
-./run_decoder.sh 20005    # LongModerate
+./run_decoder.sh 20005    # LongModerate~~
 ```
 
 ## Directory Structure
@@ -575,12 +581,12 @@ For different Meshtastic presets, specify the port:
 ```
 meshtastic_sdr_install/
 ├── gr-lora_sdr/              # LoRa transceiver for GNU Radio
-├── meshtastic_sdr/           # Original Meshtastic_SDR project
-├── meshtastic_sdr_enhanced/  # Enhanced decoder with multi-key support
+├── Meshtastic_SDR/           # sethcnelson's Meshtastic_SDR project
+├── ~~meshtastic_sdr_enhanced/  # Enhanced decoder with multi-key support
 ├── run_us_receiver.sh        # Launch US receiver
 ├── run_eu_receiver.sh        # Launch EU receiver
 ├── run_decoder.sh            # Run original decoder
-├── run_enhanced_decoder.sh   # Run enhanced decoder
+├── run_enhanced_decoder.sh   # Run enhanced decoder~~
 ├── test_rtlsdr.sh           # Test RTL-SDR hardware
 └── README.md                # This file
 ```

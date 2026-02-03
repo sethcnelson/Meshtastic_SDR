@@ -1012,7 +1012,7 @@ blocks:
     bus_structure: null
     coordinate: [136, 412.0]
     rotation: 0
-    state: true
+    state: disabled
 - name: soapy_rtlsdr_source_0
   id: soapy_rtlsdr_source
   parameters:
@@ -1034,7 +1034,7 @@ blocks:
     bus_structure: null
     coordinate: [104, 564.0]
     rotation: 0
-    state: disabled
+    state: true
 - name: zeromq_pub_sink_0
   id: zeromq_pub_sink
   parameters:

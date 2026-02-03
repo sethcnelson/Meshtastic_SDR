@@ -1,0 +1,192 @@
+FROM debian:latest
+
+# ============================================
+# Meshtastic SDR Docker Image with RTL-SDR Support
+# ============================================
+
+LABEL maintainer="Meshtastic SDR Test Environment"
+LABEL description="Debian container for GNU Radio + Meshtastic SDR with RTL-SDR hardware support"
+LABEL version="1.0"
+
+# Prevent all interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+ENV NEEDRESTART_MODE=a
+ENV NEEDRESTART_SUSPEND=1
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+
+# ============================================
+# Prevent problematic desktop packages
+# ============================================
+RUN mkdir -p /etc/apt/preferences.d/ && \
+    cat > /etc/apt/preferences.d/no-desktop-packages << 'PREFS'
+# Prevent udisks2 (causes disk write errors in containers)
+Package: udisks2
+Pin: release *
+Pin-Priority: -1
+
+# Prevent other desktop-related packages
+Package: libblockdev*
+Pin: release *
+Pin-Priority: -1
+
+Package: gvfs*
+Pin: release *
+Pin-Priority: -1
+
+Package: packagekit*
+Pin: release *
+Pin-Priority: -1
+PREFS
+
+# ============================================
+# Install base system utilities
+# ============================================
+RUN apt-get update && \
+    apt-get install -y \
+    --no-install-recommends \
+    -o Dpkg::Options::="--force-confdef" \
+    -o Dpkg::Options::="--force-confold" \
+    sudo \
+    dialog \
+    apt-utils \
+    wget \
+    curl \
+    ca-certificates \
+    gnupg \
+    lsb-release \
+    && rm -rf /var/lib/apt/lists/*
+
+# ============================================
+# Install RTL-SDR drivers and tools
+# ============================================
+RUN apt-get update && \
+    apt-get install -y \
+    --no-install-recommends \
+    -o Dpkg::Options::="--force-confdef" \
+    -o Dpkg::Options::="--force-confold" \
+    rtl-sdr \
+    librtlsdr0 \
+    librtlsdr-dev \
+    libusb-1.0-0 \
+    libusb-1.0-0-dev \
+    usbutils \
+    && rm -rf /var/lib/apt/lists/*
+
+# ============================================
+# Blacklist DVB-T driver to prevent conflicts
+# ============================================
+RUN mkdir -p /etc/modprobe.d/ && \
+    echo "blacklist dvb_usb_rtl28xxu" > /etc/modprobe.d/blacklist-rtl.conf && \
+    echo "blacklist rtl2832" >> /etc/modprobe.d/blacklist-rtl.conf && \
+    echo "blacklist rtl2830" >> /etc/modprobe.d/blacklist-rtl.conf
+
+# ============================================
+# Create udev rules for RTL-SDR access
+# ============================================
+RUN mkdir -p /etc/udev/rules.d/ && \
+    cat > /etc/udev/rules.d/20-rtlsdr.rules << 'UDEV'
+# RTL-SDR v3/v4
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2838", MODE="0666", GROUP="plugdev"
+# Older RTL-SDR dongles
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2832", MODE="0666", GROUP="plugdev"
+# Generic DVB-T dongles
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="2832", MODE="0666", GROUP="plugdev"
+
+# Disable USB autosuspend for RTL-SDR
+ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2838", TEST=="power/control", ATTR{power/control}="on"
+ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2832", TEST=="power/control", ATTR{power/control}="on"
+UDEV
+
+# ============================================
+# Create non-root user for testing
+# ============================================
+RUN groupadd -f plugdev && \
+    useradd -m -s /bin/bash -G plugdev,sudo testuser && \
+    echo "testuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
+    mkdir -p /home/testuser/install && \
+    chown -R testuser:testuser /home/testuser
+
+# ============================================
+# Set up working directory
+# ============================================
+USER testuser
+WORKDIR /home/testuser
+
+# Keep environment variables for user session
+ENV DEBIAN_FRONTEND=noninteractive
+ENV NEEDRESTART_MODE=a
+
+# ============================================
+# Create convenience test script
+# ============================================
+RUN cat > /home/testuser/test_rtlsdr_access.sh << 'TESTSCRIPT'
+#!/bin/bash
+echo "==================================="
+echo "RTL-SDR Hardware Detection Test"
+echo "==================================="
+echo ""
+
+echo "1. Checking USB devices..."
+lsusb | grep -i realtek && echo "   ✓ RTL-SDR found via lsusb" || echo "   ✗ No RTL-SDR found"
+echo ""
+
+echo "2. Checking RTL-SDR tools..."
+if command -v rtl_test &> /dev/null; then
+    echo "   ✓ rtl_test is installed"
+else
+    echo "   ✗ rtl_test not found - install rtl-sdr package"
+fi
+echo ""
+
+echo "3. Testing RTL-SDR device access..."
+rtl_test -t 2>&1 | head -n 10
+echo ""
+
+echo "4. Checking USB permissions..."
+ls -la /dev/bus/usb/*/* 2>/dev/null | grep -v "total" | head -n 5
+echo ""
+
+echo "5. Checking groups..."
+echo "   Current user: $(whoami)"
+echo "   Groups: $(groups)"
+echo ""
+
+echo "Test complete!"
+TESTSCRIPT
+
+RUN chmod +x /home/testuser/test_rtlsdr_access.sh
+
+# ============================================
+# Health check for RTL-SDR (optional)
+# ============================================
+# Uncomment if you want automated health checks
+# HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+#   CMD rtl_test -t 2>&1 | grep -q "Found" || exit 1
+
+# ============================================
+# Default command
+# ============================================
+CMD ["/bin/bash"]
+
+# ============================================
+# Usage Instructions
+# ============================================
+# Build:
+#   docker build -t meshtastic-test:latest .
+#
+# Run with RTL-SDR access:
+#   docker run -it --rm \
+#     --name meshtastic-test \
+#     --privileged \
+#     -v /dev/bus/usb:/dev/bus/usb \
+#     -v "$(pwd)":/home/testuser/install:rw \
+#     meshtastic-test:latest
+#
+# Test RTL-SDR inside container:
+#   ./test_rtlsdr_access.sh
+#
+# Run installation script:
+#   cp ~/install/install_meshtastic_sdr.sh ~/
+#   cd ~
+#   bash install_meshtastic_sdr.sh

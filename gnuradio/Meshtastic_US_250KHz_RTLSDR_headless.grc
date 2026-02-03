@@ -12,7 +12,7 @@ options:
     gen_linking: dynamic
     generate_options: no_gui
     hier_block_src_path: '.:'
-    id: Meshtastic_250KHz_all
+    id: Meshtastic_250KHz_all_headless
     max_nouts: '0'
     output_language: python
     placement: (0,0)
@@ -1012,7 +1012,7 @@ blocks:
     bus_structure: null
     coordinate: [136, 412.0]
     rotation: 0
-    state: true
+    state: disabled
 - name: soapy_rtlsdr_source_0
   id: soapy_rtlsdr_source
   parameters:
@@ -1034,7 +1034,7 @@ blocks:
     bus_structure: null
     coordinate: [104, 564.0]
     rotation: 0
-    state: disabled
+    state: true
 - name: zeromq_pub_sink_0
   id: zeromq_pub_sink
   parameters:
