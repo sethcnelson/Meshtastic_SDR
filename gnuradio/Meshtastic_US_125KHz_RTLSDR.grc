@@ -6,13 +6,13 @@ options:
     cmake_opt: ''
     comment: ''
     copyright: ''
-    description: This flow covers all presets at single frequency 906.875MHz , thus
+    description: This flow covers all presets at single frequency 904.438MHz , thus
       only needing a RTL-SDR.
     gen_cmake: 'On'
     gen_linking: dynamic
-    generate_options: no_gui
+    generate_options: qt_gui
     hier_block_src_path: '.:'
-    id: Meshtastic_250KHz_RTLSDR_headless
+    id: Meshtastic_125KHz_all
     max_nouts: '0'
     output_language: python
     placement: (0,0)
@@ -23,7 +23,7 @@ options:
     run_options: prompt
     sizing_mode: fixed
     thread_safe_setters: ''
-    title: Meshtastic_250KHz_RTLSDR_headless
+    title: Meshtastic_125KHz_all
     window_size: ''
   states:
     bus_sink: false
@@ -34,31 +34,31 @@ options:
     state: enabled
 
 blocks:
-- name: bandpass250k
+- name: bandpass125k
   id: variable_band_pass_filter_taps
   parameters:
     beta: '6.76'
     comment: ''
     gain: '1.0'
-    high_cutoff_freq: lora_250bandwidth/2
-    low_cutoff_freq: -lora_250bandwidth/2
+    high_cutoff_freq: lora_125bandwidth/2
+    low_cutoff_freq: -lora_125bandwidth/2
     samp_rate: samp_rate
     type: complex_band_pass
     value: ''
-    width: lora_250bandwidth/50
+    width: lora_125bandwidth/10
     win: window.WIN_HAMMING
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1152, 4.0]
+    coordinate: [1144, 4.0]
     rotation: 0
     state: enabled
-- name: center_250KHz
+- name: center_125KHz
   id: variable
   parameters:
     comment: ''
-    value: '906875000'
+    value: '904437500'
   states:
     bus_sink: false
     bus_source: false
@@ -135,7 +135,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [672, 8.0]
+    coordinate: [664, 8.0]
     rotation: 0
     state: enabled
 - name: impl_head
@@ -147,14 +147,14 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [592, 8.0]
+    coordinate: [584, 8.0]
     rotation: 0
     state: enabled
-- name: lora_250bandwidth
+- name: lora_125bandwidth
   id: variable
   parameters:
     comment: ''
-    value: '250000'
+    value: '125000'
   states:
     bus_sink: false
     bus_source: false
@@ -207,7 +207,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [744, 8.0]
+    coordinate: [736, 8.0]
     rotation: 0
     state: enabled
 - name: sync_word
@@ -223,10 +223,10 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [880, 8.0]
+    coordinate: [872, 8.0]
     rotation: 0
     state: enabled
-- name: freq_xlating_fir_filter_xxx_0
+- name: freq_xlating_fir_filter_xxx_0_0
   id: freq_xlating_fir_filter_xxx
   parameters:
     affinity: ''
@@ -235,17 +235,17 @@ blocks:
     comment: 'Set Minoutbuf = 17000
 
       Frame Sync needs that'
-    decim: int(samp_rate/(lora_250bandwidth * 4))
+    decim: int(samp_rate/(lora_125bandwidth * 4))
     maxoutbuf: '0'
     minoutbuf: '17000'
     samp_rate: samp_rate
-    taps: bandpass250k
+    taps: bandpass125k
     type: ccc
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [376, 592.0]
+    coordinate: [360, 368.0]
     rotation: 0
     state: enabled
 - name: import_0
@@ -261,7 +261,7 @@ blocks:
     coordinate: [176, 8.0]
     rotation: 0
     state: enabled
-- name: lora_sdr_crc_verif_0
+- name: lora_sdr_crc_verif_0_3
   id: lora_sdr_crc_verif
   parameters:
     affinity: ''
@@ -275,10 +275,10 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1288, 304.0]
+    coordinate: [1144, 376.0]
     rotation: 0
     state: enabled
-- name: lora_sdr_crc_verif_0_0
+- name: lora_sdr_crc_verif_0_4
   id: lora_sdr_crc_verif
   parameters:
     affinity: ''
@@ -292,61 +292,10 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1288, 504.0]
+    coordinate: [1144, 560.0]
     rotation: 0
     state: enabled
-- name: lora_sdr_crc_verif_0_1
-  id: lora_sdr_crc_verif
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    output_crc_check: 'False'
-    print_rx_msg: '2'
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [1288, 704.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_crc_verif_0_2
-  id: lora_sdr_crc_verif
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    output_crc_check: 'False'
-    print_rx_msg: '2'
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [1288, 896.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_crc_verif_0_2_0
-  id: lora_sdr_crc_verif
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    output_crc_check: 'False'
-    print_rx_msg: '2'
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [1288, 1088.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_deinterleaver_0
+- name: lora_sdr_deinterleaver_0_3
   id: lora_sdr_deinterleaver
   parameters:
     affinity: ''
@@ -359,10 +308,10 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1136, 264.0]
+    coordinate: [992, 336.0]
     rotation: 180
     state: enabled
-- name: lora_sdr_deinterleaver_0_0
+- name: lora_sdr_deinterleaver_0_4
   id: lora_sdr_deinterleaver
   parameters:
     affinity: ''
@@ -375,58 +324,10 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1136, 472.0]
+    coordinate: [992, 520.0]
     rotation: 180
     state: enabled
-- name: lora_sdr_deinterleaver_0_1
-  id: lora_sdr_deinterleaver
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    soft_decoding: soft_decoding
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [1136, 664.0]
-    rotation: 180
-    state: enabled
-- name: lora_sdr_deinterleaver_0_2
-  id: lora_sdr_deinterleaver
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    soft_decoding: soft_decoding
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [1136, 856.0]
-    rotation: 180
-    state: enabled
-- name: lora_sdr_deinterleaver_0_2_0
-  id: lora_sdr_deinterleaver
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    soft_decoding: soft_decoding
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [1136, 1048.0]
-    rotation: 180
-    state: enabled
-- name: lora_sdr_dewhitening_0
+- name: lora_sdr_dewhitening_0_3
   id: lora_sdr_dewhitening
   parameters:
     affinity: ''
@@ -438,10 +339,10 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1152, 320.0]
+    coordinate: [1008, 392.0]
     rotation: 0
     state: enabled
-- name: lora_sdr_dewhitening_0_0
+- name: lora_sdr_dewhitening_0_4
   id: lora_sdr_dewhitening
   parameters:
     affinity: ''
@@ -453,55 +354,10 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1152, 520.0]
+    coordinate: [1008, 576.0]
     rotation: 0
     state: enabled
-- name: lora_sdr_dewhitening_0_1
-  id: lora_sdr_dewhitening
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [1152, 720.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_dewhitening_0_2
-  id: lora_sdr_dewhitening
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [1152, 912.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_dewhitening_0_2_0
-  id: lora_sdr_dewhitening
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [1152, 1104.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_fft_demod_0
+- name: lora_sdr_fft_demod_0_3
   id: lora_sdr_fft_demod
   parameters:
     affinity: ''
@@ -515,10 +371,10 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [968, 216.0]
+    coordinate: [824, 288.0]
     rotation: 0
     state: enabled
-- name: lora_sdr_fft_demod_0_0
+- name: lora_sdr_fft_demod_0_4
   id: lora_sdr_fft_demod
   parameters:
     affinity: ''
@@ -532,170 +388,19 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [968, 424.0]
+    coordinate: [824, 472.0]
     rotation: 0
     state: enabled
-- name: lora_sdr_fft_demod_0_1
-  id: lora_sdr_fft_demod
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    max_log_approx: 'True'
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    soft_decoding: soft_decoding
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [968, 616.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_fft_demod_0_2
-  id: lora_sdr_fft_demod
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    max_log_approx: 'True'
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    soft_decoding: soft_decoding
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [968, 808.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_fft_demod_0_2_0
-  id: lora_sdr_fft_demod
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    max_log_approx: 'True'
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    soft_decoding: soft_decoding
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [968, 1000.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_frame_sync_0
+- name: lora_sdr_frame_sync_0_3
   id: lora_sdr_frame_sync
   parameters:
     affinity: ''
     alias: ''
-    bandwidth: lora_250bandwidth
-    center_freq: center_250KHz
-    comment: 'ShortFast
+    bandwidth: lora_125bandwidth
+    center_freq: center_125KHz
+    comment: 'LongModerate
 
-      SF=7, CR=5, BW=250KHz'
-    impl_head: impl_head
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    os_factor: '4'
-    preamb_len: preamble_length
-    sf: '7'
-    show_log_port: 'True'
-    sync_word: sync_word
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [768, 200.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_frame_sync_0_0
-  id: lora_sdr_frame_sync
-  parameters:
-    affinity: ''
-    alias: ''
-    bandwidth: lora_250bandwidth
-    center_freq: center_250KHz
-    comment: 'ShortSlow
-
-      SF=8, CR=5, BW=250KHz'
-    impl_head: impl_head
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    os_factor: '4'
-    preamb_len: preamble_length
-    sf: '8'
-    show_log_port: 'True'
-    sync_word: sync_word
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [768, 408.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_frame_sync_0_1
-  id: lora_sdr_frame_sync
-  parameters:
-    affinity: ''
-    alias: ''
-    bandwidth: lora_250bandwidth
-    center_freq: center_250KHz
-    comment: 'MediumFast
-
-      SF=9, CR=5, BW=250KHz'
-    impl_head: impl_head
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    os_factor: '4'
-    preamb_len: preamble_length
-    sf: '9'
-    show_log_port: 'True'
-    sync_word: sync_word
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [768, 600.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_frame_sync_0_2
-  id: lora_sdr_frame_sync
-  parameters:
-    affinity: ''
-    alias: ''
-    bandwidth: lora_250bandwidth
-    center_freq: center_250KHz
-    comment: 'MediumSlow
-
-      SF=10,CR=5,BW=250KHz'
-    impl_head: impl_head
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    os_factor: '4'
-    preamb_len: preamble_length
-    sf: '10'
-    show_log_port: 'True'
-    sync_word: sync_word
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [768, 792.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_frame_sync_0_2_0
-  id: lora_sdr_frame_sync
-  parameters:
-    affinity: ''
-    alias: ''
-    bandwidth: lora_250bandwidth
-    center_freq: center_250KHz
-    comment: 'LongFast
-
-      SF=11,CR=5,BW=250KHz'
+      SF=11, CR=8, BW=125KHz'
     impl_head: impl_head
     maxoutbuf: '0'
     minoutbuf: '0'
@@ -708,10 +413,35 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [768, 984.0]
+    coordinate: [632, 272.0]
     rotation: 0
     state: enabled
-- name: lora_sdr_gray_mapping_0
+- name: lora_sdr_frame_sync_0_4
+  id: lora_sdr_frame_sync
+  parameters:
+    affinity: ''
+    alias: ''
+    bandwidth: lora_125bandwidth
+    center_freq: center_125KHz
+    comment: 'LongSlow
+
+      SF=12, CR=8, BW=125KHz'
+    impl_head: impl_head
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    os_factor: '4'
+    preamb_len: preamble_length
+    sf: '12'
+    show_log_port: 'True'
+    sync_word: sync_word
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [632, 456.0]
+    rotation: 0
+    state: enabled
+- name: lora_sdr_gray_mapping_0_3
   id: lora_sdr_gray_mapping
   parameters:
     affinity: ''
@@ -724,10 +454,10 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1136, 216.0]
+    coordinate: [992, 288.0]
     rotation: 0
     state: enabled
-- name: lora_sdr_gray_mapping_0_0
+- name: lora_sdr_gray_mapping_0_4
   id: lora_sdr_gray_mapping
   parameters:
     affinity: ''
@@ -740,58 +470,10 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1136, 424.0]
+    coordinate: [992, 472.0]
     rotation: 0
     state: enabled
-- name: lora_sdr_gray_mapping_0_1
-  id: lora_sdr_gray_mapping
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    soft_decoding: soft_decoding
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [1136, 616.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_gray_mapping_0_2
-  id: lora_sdr_gray_mapping
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    soft_decoding: soft_decoding
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [1136, 808.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_gray_mapping_0_2_0
-  id: lora_sdr_gray_mapping
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    soft_decoding: soft_decoding
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [1136, 1000.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_hamming_dec_0
+- name: lora_sdr_hamming_dec_0_3
   id: lora_sdr_hamming_dec
   parameters:
     affinity: ''
@@ -804,10 +486,10 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [968, 264.0]
+    coordinate: [824, 336.0]
     rotation: 180
     state: enabled
-- name: lora_sdr_hamming_dec_0_0
+- name: lora_sdr_hamming_dec_0_4
   id: lora_sdr_hamming_dec
   parameters:
     affinity: ''
@@ -820,64 +502,16 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [968, 472.0]
+    coordinate: [824, 520.0]
     rotation: 180
     state: enabled
-- name: lora_sdr_hamming_dec_0_1
-  id: lora_sdr_hamming_dec
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    soft_decoding: soft_decoding
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [968, 664.0]
-    rotation: 180
-    state: enabled
-- name: lora_sdr_hamming_dec_0_2
-  id: lora_sdr_hamming_dec
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    soft_decoding: soft_decoding
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [968, 856.0]
-    rotation: 180
-    state: enabled
-- name: lora_sdr_hamming_dec_0_2_0
-  id: lora_sdr_hamming_dec
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    soft_decoding: soft_decoding
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [968, 1048.0]
-    rotation: 180
-    state: enabled
-- name: lora_sdr_header_decoder_0
+- name: lora_sdr_header_decoder_0_3
   id: lora_sdr_header_decoder
   parameters:
     affinity: ''
     alias: ''
     comment: ''
-    cr: cr_45
+    cr: cr_48
     has_crc: has_crc
     impl_head: impl_head
     ldro: '2'
@@ -889,16 +523,16 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [968, 312.0]
+    coordinate: [824, 384.0]
     rotation: 0
     state: enabled
-- name: lora_sdr_header_decoder_0_0
+- name: lora_sdr_header_decoder_0_4
   id: lora_sdr_header_decoder
   parameters:
     affinity: ''
     alias: ''
     comment: ''
-    cr: cr_45
+    cr: cr_48
     has_crc: has_crc
     impl_head: impl_head
     ldro: '2'
@@ -910,70 +544,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [968, 520.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_header_decoder_0_1
-  id: lora_sdr_header_decoder
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    cr: cr_45
-    has_crc: has_crc
-    impl_head: impl_head
-    ldro: '2'
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    pay_len: payload_length
-    print_header: 'False'
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [968, 712.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_header_decoder_0_2
-  id: lora_sdr_header_decoder
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    cr: cr_45
-    has_crc: has_crc
-    impl_head: impl_head
-    ldro: '2'
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    pay_len: payload_length
-    print_header: 'False'
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [968, 904.0]
-    rotation: 0
-    state: enabled
-- name: lora_sdr_header_decoder_0_2_0
-  id: lora_sdr_header_decoder
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    cr: cr_45
-    has_crc: has_crc
-    impl_head: impl_head
-    ldro: '2'
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    pay_len: payload_length
-    print_header: 'False'
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [968, 1096.0]
+    coordinate: [824, 568.0]
     rotation: 0
     state: enabled
 - name: note_0_0_0
@@ -1166,7 +737,7 @@ blocks:
     dc_offset_mode7: '0'
     dc_offset_mode8: '0'
     dc_offset_mode9: '0'
-    freq0: center_250KHz
+    freq0: center_125KHz
     freq1: 100e6
     freq10: 100e6
     freq11: 100e6
@@ -1345,17 +916,17 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [88, 508.0]
+    coordinate: [72, 284.0]
     rotation: 0
     state: enabled
-- name: zeromq_pub_sink_0
+- name: zeromq_pub_sink_0_0_2_3_0
   id: zeromq_pub_sink
   parameters:
-    address: tcp://0.0.0.0:20004
+    address: tcp://0.0.0.0:20005
     affinity: ''
     alias: ''
     bind: 'True'
-    comment: LongFast
+    comment: LongModerate
     drop_on_hwm: 'True'
     hwm: '-1'
     key: ''
@@ -1367,17 +938,17 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1528, 1060.0]
+    coordinate: [1368, 336.0]
     rotation: 0
     state: enabled
-- name: zeromq_pub_sink_0_0
+- name: zeromq_pub_sink_0_0_2_3_1
   id: zeromq_pub_sink
   parameters:
-    address: tcp://0.0.0.0:20003
+    address: tcp://0.0.0.0:20006
     affinity: ''
     alias: ''
     bind: 'True'
-    comment: MediumSlow
+    comment: LongSlow
     drop_on_hwm: 'True'
     hwm: '-1'
     key: ''
@@ -1389,128 +960,32 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1528, 868.0]
-    rotation: 0
-    state: enabled
-- name: zeromq_pub_sink_0_0_0
-  id: zeromq_pub_sink
-  parameters:
-    address: tcp://0.0.0.0:20002
-    affinity: ''
-    alias: ''
-    bind: 'True'
-    comment: MediumFast
-    drop_on_hwm: 'True'
-    hwm: '-1'
-    key: ''
-    pass_tags: 'False'
-    timeout: '100'
-    type: byte
-    vlen: '1'
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [1528, 676.0]
-    rotation: 0
-    state: enabled
-- name: zeromq_pub_sink_0_0_1
-  id: zeromq_pub_sink
-  parameters:
-    address: tcp://0.0.0.0:20001
-    affinity: ''
-    alias: ''
-    bind: 'True'
-    comment: ShortSlow
-    drop_on_hwm: 'True'
-    hwm: '-1'
-    key: ''
-    pass_tags: 'False'
-    timeout: '100'
-    type: byte
-    vlen: '1'
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [1544, 476.0]
-    rotation: 0
-    state: enabled
-- name: zeromq_pub_sink_0_0_2
-  id: zeromq_pub_sink
-  parameters:
-    address: tcp://0.0.0.0:20000
-    affinity: ''
-    alias: ''
-    bind: 'True'
-    comment: ShortFast
-    drop_on_hwm: 'True'
-    hwm: '-1'
-    key: ''
-    pass_tags: 'False'
-    timeout: '100'
-    type: byte
-    vlen: '1'
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [1536, 276.0]
+    coordinate: [1368, 520.0]
     rotation: 0
     state: enabled
 
 connections:
-- [freq_xlating_fir_filter_xxx_0, '0', lora_sdr_frame_sync_0, '0']
-- [freq_xlating_fir_filter_xxx_0, '0', lora_sdr_frame_sync_0_0, '0']
-- [freq_xlating_fir_filter_xxx_0, '0', lora_sdr_frame_sync_0_1, '0']
-- [freq_xlating_fir_filter_xxx_0, '0', lora_sdr_frame_sync_0_2, '0']
-- [freq_xlating_fir_filter_xxx_0, '0', lora_sdr_frame_sync_0_2_0, '0']
-- [lora_sdr_crc_verif_0, '0', zeromq_pub_sink_0_0_2, '0']
-- [lora_sdr_crc_verif_0_0, '0', zeromq_pub_sink_0_0_1, '0']
-- [lora_sdr_crc_verif_0_1, '0', zeromq_pub_sink_0_0_0, '0']
-- [lora_sdr_crc_verif_0_2, '0', zeromq_pub_sink_0_0, '0']
-- [lora_sdr_crc_verif_0_2_0, '0', zeromq_pub_sink_0, '0']
-- [lora_sdr_deinterleaver_0, '0', lora_sdr_hamming_dec_0, '0']
-- [lora_sdr_deinterleaver_0_0, '0', lora_sdr_hamming_dec_0_0, '0']
-- [lora_sdr_deinterleaver_0_1, '0', lora_sdr_hamming_dec_0_1, '0']
-- [lora_sdr_deinterleaver_0_2, '0', lora_sdr_hamming_dec_0_2, '0']
-- [lora_sdr_deinterleaver_0_2_0, '0', lora_sdr_hamming_dec_0_2_0, '0']
-- [lora_sdr_dewhitening_0, '0', lora_sdr_crc_verif_0, '0']
-- [lora_sdr_dewhitening_0_0, '0', lora_sdr_crc_verif_0_0, '0']
-- [lora_sdr_dewhitening_0_1, '0', lora_sdr_crc_verif_0_1, '0']
-- [lora_sdr_dewhitening_0_2, '0', lora_sdr_crc_verif_0_2, '0']
-- [lora_sdr_dewhitening_0_2_0, '0', lora_sdr_crc_verif_0_2_0, '0']
-- [lora_sdr_fft_demod_0, '0', lora_sdr_gray_mapping_0, '0']
-- [lora_sdr_fft_demod_0_0, '0', lora_sdr_gray_mapping_0_0, '0']
-- [lora_sdr_fft_demod_0_1, '0', lora_sdr_gray_mapping_0_1, '0']
-- [lora_sdr_fft_demod_0_2, '0', lora_sdr_gray_mapping_0_2, '0']
-- [lora_sdr_fft_demod_0_2_0, '0', lora_sdr_gray_mapping_0_2_0, '0']
-- [lora_sdr_frame_sync_0, '0', lora_sdr_fft_demod_0, '0']
-- [lora_sdr_frame_sync_0_0, '0', lora_sdr_fft_demod_0_0, '0']
-- [lora_sdr_frame_sync_0_1, '0', lora_sdr_fft_demod_0_1, '0']
-- [lora_sdr_frame_sync_0_2, '0', lora_sdr_fft_demod_0_2, '0']
-- [lora_sdr_frame_sync_0_2_0, '0', lora_sdr_fft_demod_0_2_0, '0']
-- [lora_sdr_gray_mapping_0, '0', lora_sdr_deinterleaver_0, '0']
-- [lora_sdr_gray_mapping_0_0, '0', lora_sdr_deinterleaver_0_0, '0']
-- [lora_sdr_gray_mapping_0_1, '0', lora_sdr_deinterleaver_0_1, '0']
-- [lora_sdr_gray_mapping_0_2, '0', lora_sdr_deinterleaver_0_2, '0']
-- [lora_sdr_gray_mapping_0_2_0, '0', lora_sdr_deinterleaver_0_2_0, '0']
-- [lora_sdr_hamming_dec_0, '0', lora_sdr_header_decoder_0, '0']
-- [lora_sdr_hamming_dec_0_0, '0', lora_sdr_header_decoder_0_0, '0']
-- [lora_sdr_hamming_dec_0_1, '0', lora_sdr_header_decoder_0_1, '0']
-- [lora_sdr_hamming_dec_0_2, '0', lora_sdr_header_decoder_0_2, '0']
-- [lora_sdr_hamming_dec_0_2_0, '0', lora_sdr_header_decoder_0_2_0, '0']
-- [lora_sdr_header_decoder_0, '0', lora_sdr_dewhitening_0, '0']
-- [lora_sdr_header_decoder_0, frame_info, lora_sdr_frame_sync_0, frame_info]
-- [lora_sdr_header_decoder_0_0, '0', lora_sdr_dewhitening_0_0, '0']
-- [lora_sdr_header_decoder_0_0, frame_info, lora_sdr_frame_sync_0_0, frame_info]
-- [lora_sdr_header_decoder_0_1, '0', lora_sdr_dewhitening_0_1, '0']
-- [lora_sdr_header_decoder_0_1, frame_info, lora_sdr_frame_sync_0_1, frame_info]
-- [lora_sdr_header_decoder_0_2, '0', lora_sdr_dewhitening_0_2, '0']
-- [lora_sdr_header_decoder_0_2, frame_info, lora_sdr_frame_sync_0_2, frame_info]
-- [lora_sdr_header_decoder_0_2_0, '0', lora_sdr_dewhitening_0_2_0, '0']
-- [lora_sdr_header_decoder_0_2_0, frame_info, lora_sdr_frame_sync_0_2_0, frame_info]
-- [rtlsdr_source_0, '0', freq_xlating_fir_filter_xxx_0, '0']
+- [freq_xlating_fir_filter_xxx_0_0, '0', lora_sdr_frame_sync_0_3, '0']
+- [freq_xlating_fir_filter_xxx_0_0, '0', lora_sdr_frame_sync_0_4, '0']
+- [lora_sdr_crc_verif_0_3, '0', zeromq_pub_sink_0_0_2_3_0, '0']
+- [lora_sdr_crc_verif_0_4, '0', zeromq_pub_sink_0_0_2_3_1, '0']
+- [lora_sdr_deinterleaver_0_3, '0', lora_sdr_hamming_dec_0_3, '0']
+- [lora_sdr_deinterleaver_0_4, '0', lora_sdr_hamming_dec_0_4, '0']
+- [lora_sdr_dewhitening_0_3, '0', lora_sdr_crc_verif_0_3, '0']
+- [lora_sdr_dewhitening_0_4, '0', lora_sdr_crc_verif_0_4, '0']
+- [lora_sdr_fft_demod_0_3, '0', lora_sdr_gray_mapping_0_3, '0']
+- [lora_sdr_fft_demod_0_4, '0', lora_sdr_gray_mapping_0_4, '0']
+- [lora_sdr_frame_sync_0_3, '0', lora_sdr_fft_demod_0_3, '0']
+- [lora_sdr_frame_sync_0_4, '0', lora_sdr_fft_demod_0_4, '0']
+- [lora_sdr_gray_mapping_0_3, '0', lora_sdr_deinterleaver_0_3, '0']
+- [lora_sdr_gray_mapping_0_4, '0', lora_sdr_deinterleaver_0_4, '0']
+- [lora_sdr_hamming_dec_0_3, '0', lora_sdr_header_decoder_0_3, '0']
+- [lora_sdr_hamming_dec_0_4, '0', lora_sdr_header_decoder_0_4, '0']
+- [lora_sdr_header_decoder_0_3, '0', lora_sdr_dewhitening_0_3, '0']
+- [lora_sdr_header_decoder_0_3, frame_info, lora_sdr_frame_sync_0_3, frame_info]
+- [lora_sdr_header_decoder_0_4, '0', lora_sdr_dewhitening_0_4, '0']
+- [lora_sdr_header_decoder_0_4, frame_info, lora_sdr_frame_sync_0_4, frame_info]
+- [rtlsdr_source_0, '0', freq_xlating_fir_filter_xxx_0_0, '0']
 
 metadata:
   file_format: 1
