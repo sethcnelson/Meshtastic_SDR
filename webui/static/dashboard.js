@@ -484,7 +484,9 @@
                 var posHtml = "";
                 if (item.position) {
                     posHtml = '<div class="watchlist-card-position">' +
+                        '<a href="#" class="coord-link" data-lat="' + item.position.latitude + '" data-lng="' + item.position.longitude + '" data-node="' + esc(node.node_id || "") + '">' +
                         item.position.latitude.toFixed(5) + ", " + item.position.longitude.toFixed(5) +
+                        '</a>' +
                         " (" + fmtTime(item.position.timestamp) + ")" +
                         '</div>';
                 }
@@ -495,6 +497,20 @@
                         var raw = t.data || "";
                         var needsExpand = raw.length > 40;
                         var preview = truncate(raw, 40);
+
+                        // For POSITION_APP, extract coords and add a map link
+                        var posLink = "";
+                        if (t.msg_type === "POSITION_APP" && raw) {
+                            try {
+                                var pd = JSON.parse(raw);
+                                var plat = pd.latitude || 0;
+                                var plng = pd.longitude || 0;
+                                if (plat !== 0 || plng !== 0) {
+                                    posLink = ' <a href="#" class="coord-link" data-lat="' + plat + '" data-lng="' + plng + '" data-node="' + esc(t.source_id || node.node_id || "") + '" title="Show on map">\u{1F4CD}</a>';
+                                }
+                            } catch (e) {}
+                        }
+
                         var dataHtml;
                         if (needsExpand) {
                             dataHtml = '<span class="watchlist-traffic-data expandable">' +
@@ -507,7 +523,7 @@
                         return '<div class="watchlist-traffic-entry">' +
                             '<span class="watchlist-traffic-time">' + fmtTime(t.timestamp) + '</span>' +
                             '<span class="badge ' + badgeClass(t.msg_type) + '">' + esc(t.msg_type) + '</span>' +
-                            dataHtml +
+                            dataHtml + posLink +
                             '</div>';
                     }).join("");
 
@@ -555,6 +571,9 @@
                     }
                 });
             });
+
+            // Attach coordinate link handlers
+            attachCoordLinks(container);
         });
     }
 
@@ -602,6 +621,28 @@
                 map.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
                 mapInitialized = true;
             }
+        });
+    }
+
+    // ── Pan to Node on Map ─────────────────────────────────────────────────
+    function panToNode(lat, lng, nodeId) {
+        map.setView([lat, lng], 15);
+        if (nodeId && markers[nodeId]) {
+            markers[nodeId].openPopup();
+        }
+        // Scroll map panel into view on mobile/small screens
+        document.getElementById("panel-map").scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    function attachCoordLinks(container) {
+        container.querySelectorAll(".coord-link").forEach(function (link) {
+            link.addEventListener("click", function (e) {
+                e.preventDefault();
+                var lat = parseFloat(this.getAttribute("data-lat"));
+                var lng = parseFloat(this.getAttribute("data-lng"));
+                var nodeId = this.getAttribute("data-node");
+                panToNode(lat, lng, nodeId);
+            });
         });
     }
 

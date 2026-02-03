@@ -513,6 +513,17 @@ tr:hover td {
     margin-bottom: 6px;
 }
 
+.coord-link {
+    color: var(--cyan);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.coord-link:hover {
+    color: var(--accent);
+    text-decoration: underline;
+}
+
 .watchlist-card-traffic {
     border-top: 1px solid var(--border);
     padding-top: 6px;
