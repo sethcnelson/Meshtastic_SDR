@@ -5,6 +5,7 @@ import zmq
 import time
 
 from packet import Packet
+from util import compute_channel_hash
 
 #reads keys from file called 'keys'
 parser = argparse.ArgumentParser(description = "Process incoming command parmeters")
@@ -12,6 +13,7 @@ parser.add_argument("ip", action = "store", help = "IP Address.")
 parser.add_argument("port", action = "store", help = "Port")
 parser.add_argument("-d", "--debug", action = "store_true", dest = "debug", help = "Print more debug messages")
 parser.add_argument("-s", "--save", action = "store_true", dest = "save", help = "Save packets to disk")
+parser.add_argument("-p", "--preset", action = "store", dest = "preset", default = "LongFast", help = "Modem preset name, used as default channel name (default: LongFast)")
 args = parser.parse_args()
 
 debug = False
@@ -80,7 +82,13 @@ def handle_packet(pkt = None):
             continue
     
     if decrypted:
-        #print("[INFO] Decrypted successfully:")
+        pkt_hash = packet.get_channel_hash()
+        resolved = channel_map.get(pkt_hash)
+        if resolved:
+            print(f"[INFO] channel: {resolved}")
+        else:
+            print(f"[INFO] channel: unknown (hash: {pkt_hash})")
+
         message = packet.get_message()
         message_json = message.to_json()
         if isinstance(message_json, str):
@@ -125,17 +133,34 @@ if __name__ == "__main__":
         temp_keys = ["1PG7OiApB1nwvP+rz05pAQ=="]
 
     keys = []
+    channel_map = {}
+    preset = args.preset
 
-    for key in temp_keys:
-        if not key or key.startswith("#"):
+    for entry in temp_keys:
+        if not entry or entry.startswith("#"):
             continue
 
-        valid_key = validate_aes_key(key)
+        # Support optional name:key format (colon is unambiguous since base64 never contains ':')
+        if ":" in entry:
+            name, raw_key = entry.split(":", 1)
+        else:
+            name = None
+            raw_key = entry
+
+        valid_key = validate_aes_key(raw_key)
 
         if not valid_key:
-            print(f"[WARN] Key '{key}' is not a valid AES 128/256 key!")
+            print(f"[WARN] Key '{raw_key}' is not a valid AES 128/256 key!")
         else:
             keys.append(valid_key)
+
+            # Build channel hash mapping using the original (unexpanded) key for hash computation
+            channel_name = name if name else preset
+            h = compute_channel_hash(channel_name, raw_key)
+            channel_map[h] = channel_name
+
+            if debug:
+                print(f"[DEBUG] Registered channel hash '{h}' -> '{channel_name}' (key: {raw_key})")
 
     if len(keys) > 0:
         print(f"[INFO] Loaded {len(keys)} keys")
