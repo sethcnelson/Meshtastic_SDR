@@ -32,22 +32,78 @@
         ROUTING_APP: "badge-routing"
     };
 
+    // ── Tile Layer Providers ─────────────────────────────────────────────────
+    var TILE_LAYERS = {
+        dark: {
+            url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+            subdomains: "abcd",
+            maxZoom: 19
+        },
+        light: {
+            url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+            subdomains: "abcd",
+            maxZoom: 19
+        },
+        satellite: {
+            url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+            attribution: '&copy; Esri',
+            subdomains: null,
+            maxZoom: 18
+        },
+        topo: {
+            url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://opentopomap.org">OpenTopoMap</a>',
+            subdomains: "abc",
+            maxZoom: 17
+        }
+    };
+
     // ── State ────────────────────────────────────────────────────────────────
     var map = null;
     var markers = {};
     var mapInitialized = false;
     var knownMsgTypes = new Set();
     var debounceTimer = null;
+    var currentTileLayer = null;
+
+    // Cached data arrays
+    var nodesData = [];
+    var trafficData = [];
+
+    // Sort state per table: { col: index, asc: boolean } or null
+    var nodeSort = null;
+    var trafficSort = null;
+
+    // Node directory filter
+    var nodeFilterText = "";
+    var nodeFilterTimer = null;
+
+    // Watch list (array of node_id strings)
+    var watchList = [];
 
     // ── Init ─────────────────────────────────────────────────────────────────
     function init() {
-        map = L.map("map", { zoomControl: true }).setView([39.8, -98.5], 4);
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-            subdomains: "abcd",
-            maxZoom: 19
-        }).addTo(map);
+        // Load watch list from localStorage
+        try {
+            var stored = localStorage.getItem("meshWatchList");
+            if (stored) watchList = JSON.parse(stored);
+        } catch (e) { watchList = []; }
 
+        // Initialize map
+        var savedTheme = localStorage.getItem("meshMapTheme") || "dark";
+        map = L.map("map", { zoomControl: true }).setView([39.8, -98.5], 4);
+        setMapTheme(savedTheme);
+
+        // Set theme dropdown to saved value
+        var themeSelect = document.getElementById("map-theme");
+        themeSelect.value = savedTheme;
+        themeSelect.addEventListener("change", function () {
+            setMapTheme(this.value);
+        });
+
+        // Traffic filters
         document.getElementById("filter-type").addEventListener("change", function () {
             fetchTraffic();
         });
@@ -57,15 +113,107 @@
             debounceTimer = setTimeout(fetchTraffic, 300);
         });
 
+        // Node directory filter
+        document.getElementById("node-filter").addEventListener("input", function () {
+            clearTimeout(nodeFilterTimer);
+            var val = this.value;
+            nodeFilterTimer = setTimeout(function () {
+                nodeFilterText = val.trim().toLowerCase();
+                renderNodes();
+            }, 200);
+        });
+
+        // Sidebar toggle
+        document.getElementById("sidebar-toggle").addEventListener("click", function () {
+            document.getElementById("sidebar").classList.toggle("open");
+        });
+
+        // Initialize sort headers
+        initSortHeaders();
+
         refresh();
         setInterval(refresh, 10000);
     }
 
+    // ── Map Theme ────────────────────────────────────────────────────────────
+    function setMapTheme(theme) {
+        if (currentTileLayer) {
+            map.removeLayer(currentTileLayer);
+        }
+
+        var cfg = TILE_LAYERS[theme] || TILE_LAYERS.dark;
+        var opts = {
+            attribution: cfg.attribution,
+            maxZoom: cfg.maxZoom
+        };
+        if (cfg.subdomains) opts.subdomains = cfg.subdomains;
+
+        currentTileLayer = L.tileLayer(cfg.url, opts).addTo(map);
+
+        // Update body class for popup styling
+        document.body.className = document.body.className.replace(/map-\w+/g, "");
+        document.body.classList.add("map-" + theme);
+
+        localStorage.setItem("meshMapTheme", theme);
+    }
+
+    // ── Sort Headers ─────────────────────────────────────────────────────────
+    function initSortHeaders() {
+        // Node table headers
+        var nodeHeaders = document.querySelectorAll("#nodes-table th[data-col]");
+        nodeHeaders.forEach(function (th) {
+            th.addEventListener("click", function () {
+                var col = parseInt(this.getAttribute("data-col"), 10);
+                if (nodeSort && nodeSort.col === col) {
+                    nodeSort.asc = !nodeSort.asc;
+                } else {
+                    nodeSort = { col: col, asc: true };
+                }
+                updateSortArrows("#nodes-table", nodeSort);
+                renderNodes();
+            });
+        });
+
+        // Traffic table headers
+        var trafficHeaders = document.querySelectorAll("#traffic-table th[data-col]");
+        trafficHeaders.forEach(function (th) {
+            th.addEventListener("click", function () {
+                var col = parseInt(this.getAttribute("data-col"), 10);
+                if (trafficSort && trafficSort.col === col) {
+                    trafficSort.asc = !trafficSort.asc;
+                } else {
+                    trafficSort = { col: col, asc: true };
+                }
+                updateSortArrows("#traffic-table", trafficSort);
+                renderTraffic();
+            });
+        });
+    }
+
+    function updateSortArrows(tableSelector, sortState) {
+        var headers = document.querySelectorAll(tableSelector + " th[data-col]");
+        headers.forEach(function (th) {
+            // Remove existing arrow
+            var arrow = th.querySelector(".sort-arrow");
+            if (arrow) arrow.remove();
+
+            var col = parseInt(th.getAttribute("data-col"), 10);
+            if (sortState && sortState.col === col) {
+                var span = document.createElement("span");
+                span.className = "sort-arrow";
+                span.textContent = sortState.asc ? "\u25B2" : "\u25BC";
+                th.appendChild(span);
+            }
+        });
+    }
+
+    // ── Refresh ──────────────────────────────────────────────────────────────
     function refresh() {
         fetchStats();
         fetchNodes();
         fetchTraffic();
         fetchPositions();
+        fetchWatchList();
         document.getElementById("last-update").textContent =
             "Updated " + new Date().toLocaleTimeString();
     }
@@ -112,27 +260,97 @@
         });
     }
 
+    // ── Node Name Display Helper ─────────────────────────────────────────────
+    function displayNodeName(longName, shortName, nodeId) {
+        if (longName || shortName) {
+            return esc(longName || shortName);
+        }
+        // No name resolved — show node ID with muted label
+        return esc(nodeId) + ' <span class="node-unnamed">(no name)</span>';
+    }
+
     // ── Nodes ────────────────────────────────────────────────────────────────
     function fetchNodes() {
         fetchJSON("/api/nodes", function (rows) {
-            var tbody = document.querySelector("#nodes-table tbody");
-
-            if (rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="muted">No data yet</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = rows.map(function (n) {
-                var name = n.long_name || n.short_name || "—";
+            nodesData = rows.map(function (n) {
                 var hw = HW_MODELS[n.hw_model] || ("ID " + n.hw_model);
-                return "<tr>" +
-                    "<td>" + esc(n.node_id) + "</td>" +
-                    "<td>" + esc(name) + "</td>" +
-                    "<td>" + esc(hw) + "</td>" +
-                    "<td>" + fmtTime(n.first_seen) + "</td>" +
-                    "<td>" + fmtTime(n.last_seen) + "</td>" +
-                    "</tr>";
-            }).join("");
+                return {
+                    node_id: n.node_id,
+                    long_name: n.long_name,
+                    short_name: n.short_name,
+                    cols: [n.node_id, n.long_name || n.short_name || "", hw, n.first_seen || "", n.last_seen || ""],
+                    hw: hw,
+                    first_seen: n.first_seen,
+                    last_seen: n.last_seen
+                };
+            });
+            renderNodes();
+        });
+    }
+
+    function renderNodes() {
+        var tbody = document.querySelector("#nodes-table tbody");
+        var rows = nodesData;
+
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="muted">No data yet</td></tr>';
+            return;
+        }
+
+        // Filter
+        if (nodeFilterText) {
+            rows = rows.filter(function (n) {
+                var searchable = n.cols.join(" ").toLowerCase();
+                return searchable.indexOf(nodeFilterText) !== -1;
+            });
+        }
+
+        // Sort
+        if (nodeSort) {
+            var col = nodeSort.col;
+            var asc = nodeSort.asc;
+            var isDate = col === 3 || col === 4;
+            rows = rows.slice().sort(function (a, b) {
+                var va = a.cols[col];
+                var vb = b.cols[col];
+                if (va == null) va = "";
+                if (vb == null) vb = "";
+
+                if (isDate) {
+                    var da = va ? new Date(va).getTime() : 0;
+                    var db = vb ? new Date(vb).getTime() : 0;
+                    return asc ? da - db : db - da;
+                }
+
+                va = String(va).toLowerCase();
+                vb = String(vb).toLowerCase();
+                if (va < vb) return asc ? -1 : 1;
+                if (va > vb) return asc ? 1 : -1;
+                return 0;
+            });
+        }
+
+        tbody.innerHTML = rows.map(function (n) {
+            var isStarred = watchList.indexOf(n.node_id) !== -1;
+            var starClass = isStarred ? "star-btn starred" : "star-btn";
+            var starChar = isStarred ? "\u2605" : "\u2606";
+
+            return "<tr>" +
+                '<td class="th-star"><button class="' + starClass + '" data-node="' + esc(n.node_id) + '">' + starChar + '</button></td>' +
+                "<td>" + esc(n.node_id) + "</td>" +
+                "<td>" + displayNodeName(n.long_name, n.short_name, n.node_id) + "</td>" +
+                "<td>" + esc(n.hw) + "</td>" +
+                "<td>" + fmtTime(n.first_seen) + "</td>" +
+                "<td>" + fmtTime(n.last_seen) + "</td>" +
+                "</tr>";
+        }).join("");
+
+        // Attach star click handlers
+        tbody.querySelectorAll(".star-btn").forEach(function (btn) {
+            btn.addEventListener("click", function (e) {
+                e.stopPropagation();
+                toggleWatch(this.getAttribute("data-node"));
+            });
         });
     }
 
@@ -146,26 +364,155 @@
 
         var url = "/api/traffic" + (params.length ? "?" + params.join("&") : "");
         fetchJSON(url, function (rows) {
-            var tbody = document.querySelector("#traffic-table tbody");
+            trafficData = rows.map(function (r) {
+                var src = r.source_name || r.source_id || "";
+                var dst = r.dest_name || r.dest_id || "";
+                var dataStr = truncate(r.data || "", 60);
+                return {
+                    _raw: r,
+                    cols: [r.timestamp || "", src, dst, r.msg_type || "", r.channel_name || "", dataStr]
+                };
+            });
+            renderTraffic();
+        });
+    }
 
-            if (rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="muted">No data yet</td></tr>';
+    function renderTraffic() {
+        var tbody = document.querySelector("#traffic-table tbody");
+        var rows = trafficData;
+
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="muted">No data yet</td></tr>';
+            return;
+        }
+
+        // Sort
+        if (trafficSort) {
+            var col = trafficSort.col;
+            var asc = trafficSort.asc;
+            var isDate = col === 0;
+            rows = rows.slice().sort(function (a, b) {
+                var va = a.cols[col];
+                var vb = b.cols[col];
+                if (va == null) va = "";
+                if (vb == null) vb = "";
+
+                if (isDate) {
+                    var da = va ? new Date(va).getTime() : 0;
+                    var db = vb ? new Date(vb).getTime() : 0;
+                    return asc ? da - db : db - da;
+                }
+
+                va = String(va).toLowerCase();
+                vb = String(vb).toLowerCase();
+                if (va < vb) return asc ? -1 : 1;
+                if (va > vb) return asc ? 1 : -1;
+                return 0;
+            });
+        }
+
+        tbody.innerHTML = rows.map(function (item) {
+            var r = item._raw;
+            var srcDisplay = r.source_name
+                ? esc(r.source_name)
+                : (r.source_id ? esc(r.source_id) + ' <span class="node-unnamed">(no name)</span>' : "\u2014");
+            var dstDisplay = r.dest_name
+                ? esc(r.dest_name)
+                : (r.dest_id ? esc(r.dest_id) + ' <span class="node-unnamed">(no name)</span>' : "\u2014");
+            var dataStr = truncate(r.data || "", 60);
+            return "<tr>" +
+                "<td>" + fmtTime(r.timestamp) + "</td>" +
+                "<td>" + srcDisplay + "</td>" +
+                "<td>" + dstDisplay + "</td>" +
+                '<td><span class="badge ' + badgeClass(r.msg_type) + '">' + esc(r.msg_type) + '</span></td>' +
+                "<td>" + esc(r.channel_name || "\u2014") + "</td>" +
+                "<td>" + esc(dataStr) + "</td>" +
+                "</tr>";
+        }).join("");
+    }
+
+    // ── Watch List ───────────────────────────────────────────────────────────
+    function toggleWatch(nodeId) {
+        var idx = watchList.indexOf(nodeId);
+        if (idx !== -1) {
+            watchList.splice(idx, 1);
+        } else {
+            watchList.push(nodeId);
+        }
+        localStorage.setItem("meshWatchList", JSON.stringify(watchList));
+        renderNodes();
+        fetchWatchList();
+    }
+
+    function fetchWatchList() {
+        var container = document.getElementById("watchlist-container");
+
+        if (watchList.length === 0) {
+            container.innerHTML = '<p class="muted watchlist-empty">Click the star icon on any node to add it here</p>';
+            return;
+        }
+
+        var url = "/api/watchlist?nodes=" + encodeURIComponent(watchList.join(","));
+        fetchJSON(url, function (items) {
+            if (!items || items.length === 0) {
+                container.innerHTML = '<p class="muted watchlist-empty">No data for watched nodes</p>';
                 return;
             }
 
-            tbody.innerHTML = rows.map(function (r) {
-                var src = r.source_name || r.source_id || "—";
-                var dst = r.dest_name || r.dest_id || "—";
-                var dataStr = truncate(r.data || "", 60);
-                return "<tr>" +
-                    "<td>" + fmtTime(r.timestamp) + "</td>" +
-                    "<td>" + esc(src) + "</td>" +
-                    "<td>" + esc(dst) + "</td>" +
-                    '<td><span class="badge ' + badgeClass(r.msg_type) + '">' + esc(r.msg_type) + '</span></td>' +
-                    "<td>" + esc(r.channel_name || "—") + "</td>" +
-                    "<td>" + esc(dataStr) + "</td>" +
-                    "</tr>";
+            container.innerHTML = items.map(function (item) {
+                var node = item.node || {};
+                var nameHtml = displayNodeName(node.long_name, node.short_name, node.node_id);
+                var hw = HW_MODELS[node.hw_model] || ("ID " + (node.hw_model || "?"));
+                var lastSeen = node.last_seen ? fmtTime(node.last_seen) : "\u2014";
+
+                var posHtml = "";
+                if (item.position) {
+                    posHtml = '<div class="watchlist-card-position">' +
+                        item.position.latitude.toFixed(5) + ", " + item.position.longitude.toFixed(5) +
+                        " (" + fmtTime(item.position.timestamp) + ")" +
+                        '</div>';
+                }
+
+                var trafficHtml = "";
+                if (item.traffic && item.traffic.length > 0) {
+                    var entries = item.traffic.map(function (t) {
+                        var dataPreview = truncate(t.data || "", 40);
+                        return '<div class="watchlist-traffic-entry">' +
+                            '<span class="watchlist-traffic-time">' + fmtTime(t.timestamp) + '</span>' +
+                            '<span class="badge ' + badgeClass(t.msg_type) + '">' + esc(t.msg_type) + '</span>' +
+                            '<span class="watchlist-traffic-data">' + esc(dataPreview) + '</span>' +
+                            '</div>';
+                    }).join("");
+
+                    trafficHtml = '<div class="watchlist-card-traffic">' +
+                        '<div class="watchlist-card-traffic-title">Recent Activity</div>' +
+                        entries +
+                        '</div>';
+                }
+
+                return '<div class="watchlist-card">' +
+                    '<div class="watchlist-card-header">' +
+                        '<div>' +
+                            '<div class="watchlist-card-name">' + nameHtml + '</div>' +
+                            '<div class="watchlist-card-id">' + esc(node.node_id || "") + '</div>' +
+                        '</div>' +
+                        '<button class="watchlist-remove-btn" data-node="' + esc(node.node_id || "") + '" title="Remove">\u2715</button>' +
+                    '</div>' +
+                    '<div class="watchlist-card-meta">' +
+                        '<span>' + esc(hw) + '</span>' +
+                        '<span>Last: ' + lastSeen + '</span>' +
+                    '</div>' +
+                    posHtml +
+                    trafficHtml +
+                    '</div>';
             }).join("");
+
+            // Attach remove handlers
+            container.querySelectorAll(".watchlist-remove-btn").forEach(function (btn) {
+                btn.addEventListener("click", function () {
+                    toggleWatch(this.getAttribute("data-node"));
+                });
+            });
         });
     }
 
@@ -181,7 +528,13 @@
                 bounds.push(latlng);
 
                 var label = p.source_name || p.source_id;
-                var popup = "<b>" + esc(label) + "</b><br>" +
+                var nameHtml;
+                if (p.source_name) {
+                    nameHtml = "<b>" + esc(p.source_name) + "</b>";
+                } else {
+                    nameHtml = "<b>" + esc(p.source_id) + '</b> <span class="node-unnamed">(no name)</span>';
+                }
+                var popup = nameHtml + "<br>" +
                     esc(p.source_id) + "<br>" +
                     p.latitude.toFixed(5) + ", " + p.longitude.toFixed(5) + "<br>" +
                     "<small>" + fmtTime(p.timestamp) + "</small>";
@@ -215,7 +568,7 @@
     }
 
     function fmtTime(iso) {
-        if (!iso) return "—";
+        if (!iso) return "\u2014";
         try {
             var d = new Date(iso);
             return d.toLocaleString(undefined, {

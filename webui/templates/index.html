@@ -10,25 +10,28 @@
 </head>
 <body>
     <header>
-        <h1>Meshtastic SDR Dashboard</h1>
-        <span id="last-update" class="muted">—</span>
+        <div class="header-left">
+            <button id="sidebar-toggle" class="sidebar-toggle" title="Toggle Stats">&#9776;</button>
+            <h1>Meshtastic SDR Dashboard</h1>
+        </div>
+        <span id="last-update" class="muted">&mdash;</span>
     </header>
 
-    <main class="grid">
-        <!-- Stats Panel -->
-        <section id="panel-stats" class="panel">
+    <!-- Collapsible Stats Sidebar -->
+    <aside id="sidebar" class="sidebar">
+        <div class="sidebar-content">
             <h2>Stats</h2>
             <div class="stats-cards">
                 <div class="stat-card">
-                    <span class="stat-value" id="stat-nodes">—</span>
+                    <span class="stat-value" id="stat-nodes">&mdash;</span>
                     <span class="stat-label">Nodes</span>
                 </div>
                 <div class="stat-card">
-                    <span class="stat-value" id="stat-packets">—</span>
+                    <span class="stat-value" id="stat-packets">&mdash;</span>
                     <span class="stat-label">Total Packets</span>
                 </div>
                 <div class="stat-card">
-                    <span class="stat-value" id="stat-24h">—</span>
+                    <span class="stat-value" id="stat-24h">&mdash;</span>
                     <span class="stat-label">Last 24h</span>
                 </div>
             </div>
@@ -36,30 +39,52 @@
             <ul id="by-type-list" class="by-type-list">
                 <li class="muted">No data yet</li>
             </ul>
+        </div>
+    </aside>
+
+    <main class="grid">
+        <!-- Watch List Panel -->
+        <section id="panel-watchlist" class="panel">
+            <h2>Watch List</h2>
+            <div id="watchlist-container" class="watchlist-container">
+                <p class="muted watchlist-empty">Click the star icon on any node to add it here</p>
+            </div>
         </section>
 
         <!-- Map Panel -->
         <section id="panel-map" class="panel">
-            <h2>Node Map</h2>
+            <div class="panel-header">
+                <h2>Node Map</h2>
+                <select id="map-theme" class="map-theme-select">
+                    <option value="dark">Dark</option>
+                    <option value="light">Light</option>
+                    <option value="satellite">Satellite</option>
+                    <option value="topo">Topo</option>
+                </select>
+            </div>
             <div id="map"></div>
         </section>
 
         <!-- Node Directory Panel -->
         <section id="panel-nodes" class="panel">
             <h2>Node Directory</h2>
+            <div class="filters">
+                <input type="text" id="node-filter" placeholder="Filter nodes...">
+            </div>
             <div class="table-wrap">
                 <table id="nodes-table">
                     <thead>
                         <tr>
-                            <th>ID</th>
-                            <th>Name</th>
-                            <th>HW Model</th>
-                            <th>First Seen</th>
-                            <th>Last Seen</th>
+                            <th class="th-star"></th>
+                            <th data-col="0">ID</th>
+                            <th data-col="1">Name</th>
+                            <th data-col="2">HW Model</th>
+                            <th data-col="3" data-sort-type="date">First Seen</th>
+                            <th data-col="4" data-sort-type="date">Last Seen</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr><td colspan="5" class="muted">No data yet</td></tr>
+                        <tr><td colspan="6" class="muted">No data yet</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -78,12 +103,12 @@
                 <table id="traffic-table">
                     <thead>
                         <tr>
-                            <th>Time</th>
-                            <th>Source</th>
-                            <th>Dest</th>
-                            <th>Type</th>
-                            <th>Channel</th>
-                            <th>Data</th>
+                            <th data-col="0" data-sort-type="date">Time</th>
+                            <th data-col="1">Source</th>
+                            <th data-col="2">Dest</th>
+                            <th data-col="3">Type</th>
+                            <th data-col="4">Channel</th>
+                            <th data-col="5">Data</th>
                         </tr>
                     </thead>
                     <tbody>

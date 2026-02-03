@@ -14,6 +14,7 @@
     --red: #f85149;
     --cyan: #39d2c0;
     --font-mono: "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", Consolas, monospace;
+    --sidebar-width: 280px;
 }
 
 * {
@@ -38,6 +39,14 @@ header {
     padding: 12px 20px;
     border-bottom: 1px solid var(--border);
     background: var(--bg-panel);
+    position: relative;
+    z-index: 20;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 header h1 {
@@ -48,6 +57,69 @@ header h1 {
 
 .muted {
     color: var(--text-muted);
+}
+
+/* ── Sidebar Toggle Button ──────────────────────────────────────────────── */
+
+.sidebar-toggle {
+    background: var(--bg-card);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 16px;
+    cursor: pointer;
+    line-height: 1;
+    font-family: var(--font-mono);
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.sidebar-toggle:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+/* ── Collapsible Sidebar ────────────────────────────────────────────────── */
+
+.sidebar {
+    position: fixed;
+    top: 49px;
+    left: 0;
+    width: var(--sidebar-width);
+    height: calc(100vh - 49px);
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border);
+    z-index: 15;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    overflow-y: auto;
+}
+
+.sidebar.open {
+    transform: translateX(0);
+}
+
+.sidebar-content {
+    padding: 16px;
+}
+
+.sidebar-content h2 {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+}
+
+.sidebar-content h3 {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-top: 12px;
+    margin-bottom: 6px;
 }
 
 /* ── Grid Layout ─────────────────────────────────────────────────────────── */
@@ -89,16 +161,50 @@ header h1 {
     margin-bottom: 6px;
 }
 
+/* ── Panel Header (flex row for h2 + controls) ──────────────────────────── */
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    margin-bottom: 0;
+}
+
+.panel-header h2 {
+    margin-bottom: 0;
+}
+
+/* ── Map Theme Select ───────────────────────────────────────────────────── */
+
+.map-theme-select {
+    background: var(--bg-card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    outline: none;
+    cursor: pointer;
+}
+
+.map-theme-select:focus {
+    border-color: var(--accent);
+}
+
 /* ── Stats Cards ─────────────────────────────────────────────────────────── */
 
 .stats-cards {
     display: flex;
     gap: 10px;
     flex-shrink: 0;
+    flex-wrap: wrap;
 }
 
 .stat-card {
     flex: 1;
+    min-width: 70px;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -148,6 +254,7 @@ header h1 {
     min-height: 0;
     border-radius: 4px;
     border: 1px solid var(--border);
+    margin-top: 12px;
 }
 
 /* Override Leaflet popup styles for dark theme */
@@ -166,6 +273,21 @@ header h1 {
 
 .leaflet-popup-content {
     margin: 10px 12px;
+}
+
+/* Light map theme popup overrides */
+body.map-light .leaflet-popup-content-wrapper,
+body.map-satellite .leaflet-popup-content-wrapper,
+body.map-topo .leaflet-popup-content-wrapper {
+    background: var(--bg-card);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+body.map-light .leaflet-popup-tip,
+body.map-satellite .leaflet-popup-tip,
+body.map-topo .leaflet-popup-tip {
+    background: var(--bg-card);
 }
 
 /* ── Tables ──────────────────────────────────────────────────────────────── */
@@ -201,6 +323,29 @@ th {
     white-space: nowrap;
 }
 
+th[data-col] {
+    cursor: pointer;
+    user-select: none;
+}
+
+th[data-col]:hover {
+    color: var(--accent);
+}
+
+.sort-arrow {
+    display: inline-block;
+    margin-left: 4px;
+    font-size: 9px;
+    color: var(--accent);
+}
+
+.th-star {
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
+    padding: 6px 4px;
+}
+
 td {
     padding: 5px 8px;
     border-bottom: 1px solid var(--border);
@@ -212,6 +357,36 @@ td {
 
 tr:hover td {
     background: rgba(88, 166, 255, 0.04);
+}
+
+/* ── Star Button ─────────────────────────────────────────────────────────── */
+
+.star-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0;
+    line-height: 1;
+    transition: color 0.15s;
+}
+
+.star-btn:hover {
+    color: var(--orange);
+}
+
+.star-btn.starred {
+    color: var(--orange);
+}
+
+/* ── Unnamed Node ────────────────────────────────────────────────────────── */
+
+.node-unnamed {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 11px;
+    margin-left: 4px;
 }
 
 /* ── Filters ─────────────────────────────────────────────────────────────── */
@@ -266,6 +441,110 @@ tr:hover td {
 .badge-routing    { background: rgba(57, 210, 192, 0.15); color: var(--cyan); }
 .badge-other      { background: rgba(110, 118, 129, 0.15); color: var(--text-muted); }
 
+/* ── Watch List ──────────────────────────────────────────────────────────── */
+
+.watchlist-container {
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
+
+.watchlist-empty {
+    text-align: center;
+    padding: 40px 16px;
+    font-size: 12px;
+}
+
+.watchlist-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+}
+
+.watchlist-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 6px;
+}
+
+.watchlist-card-name {
+    font-weight: 600;
+    color: var(--accent);
+    font-size: 12px;
+}
+
+.watchlist-card-id {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.watchlist-card-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.watchlist-card-meta span {
+    margin-right: 10px;
+}
+
+.watchlist-card-position {
+    font-size: 11px;
+    color: var(--cyan);
+    margin-bottom: 6px;
+}
+
+.watchlist-card-traffic {
+    border-top: 1px solid var(--border);
+    padding-top: 6px;
+    margin-top: 4px;
+}
+
+.watchlist-card-traffic-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.watchlist-traffic-entry {
+    font-size: 11px;
+    padding: 2px 0;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.watchlist-traffic-time {
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.watchlist-traffic-data {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.watchlist-remove-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 2px;
+    line-height: 1;
+    transition: color 0.15s;
+}
+
+.watchlist-remove-btn:hover {
+    color: var(--red);
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 
 @media (max-width: 1024px) {
@@ -285,5 +564,9 @@ tr:hover td {
 
     .stats-cards {
         flex-wrap: wrap;
+    }
+
+    .sidebar {
+        width: 100%;
     }
 }

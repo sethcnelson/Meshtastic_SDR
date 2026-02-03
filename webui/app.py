@@ -116,6 +116,72 @@ def api_positions():
     return jsonify(positions)
 
 
+@app.route("/api/watchlist")
+def api_watchlist():
+    nodes_param = request.args.get("nodes", "").strip()
+    if not nodes_param:
+        return jsonify([])
+
+    node_ids = [n.strip() for n in nodes_param.split(",") if n.strip()]
+    if not node_ids:
+        return jsonify([])
+
+    # Fetch node info
+    placeholders = ",".join("?" * len(node_ids))
+    node_rows = db_conn.execute(
+        f"SELECT node_id, long_name, short_name, hw_model, role, "
+        f"       first_seen, last_seen "
+        f"FROM nodes WHERE node_id IN ({placeholders})",
+        node_ids,
+    ).fetchall()
+    node_map = {r["node_id"]: dict(r) for r in node_rows}
+
+    result = []
+    for nid in node_ids:
+        node_info = node_map.get(nid, {"node_id": nid})
+
+        # Last 5 traffic entries involving this node
+        traffic_rows = db_conn.execute(
+            "SELECT id, timestamp, source_id, source_name, dest_id, dest_name, "
+            "       packet_id, channel_hash, channel_name, port_num, msg_type, data "
+            "FROM traffic "
+            "WHERE source_id = ? OR dest_id = ? "
+            "ORDER BY id DESC LIMIT 5",
+            (nid, nid),
+        ).fetchall()
+
+        # Latest position
+        pos_row = db_conn.execute(
+            "SELECT data, timestamp FROM traffic "
+            "WHERE source_id = ? AND msg_type = 'POSITION_APP' "
+            "ORDER BY id DESC LIMIT 1",
+            (nid,),
+        ).fetchone()
+
+        position = None
+        if pos_row:
+            try:
+                data = json.loads(pos_row["data"]) if pos_row["data"] else {}
+                lat = data.get("latitude", 0)
+                lng = data.get("longitude", 0)
+                if lat != 0 or lng != 0:
+                    position = {
+                        "latitude": lat,
+                        "longitude": lng,
+                        "timestamp": pos_row["timestamp"],
+                    }
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        result.append({
+            "node": node_info,
+            "traffic": [dict(r) for r in traffic_rows],
+            "position": position,
+        })
+
+    return jsonify(result)
+
+
 @app.route("/api/stats")
 def api_stats():
     total_nodes = db_conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0]
