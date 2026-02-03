@@ -492,11 +492,22 @@
                 var trafficHtml = "";
                 if (item.traffic && item.traffic.length > 0) {
                     var entries = item.traffic.map(function (t) {
-                        var dataPreview = truncate(t.data || "", 40);
+                        var raw = t.data || "";
+                        var needsExpand = raw.length > 40;
+                        var preview = truncate(raw, 40);
+                        var dataHtml;
+                        if (needsExpand) {
+                            dataHtml = '<span class="watchlist-traffic-data expandable">' +
+                                '<span class="data-preview">' + esc(preview) + '</span>' +
+                                '<span class="data-full" style="display:none">' + esc(raw) + '</span>' +
+                                '</span>';
+                        } else {
+                            dataHtml = '<span class="watchlist-traffic-data">' + esc(raw) + '</span>';
+                        }
                         return '<div class="watchlist-traffic-entry">' +
                             '<span class="watchlist-traffic-time">' + fmtTime(t.timestamp) + '</span>' +
                             '<span class="badge ' + badgeClass(t.msg_type) + '">' + esc(t.msg_type) + '</span>' +
-                            '<span class="watchlist-traffic-data">' + esc(dataPreview) + '</span>' +
+                            dataHtml +
                             '</div>';
                     }).join("");
 
@@ -527,6 +538,21 @@
             container.querySelectorAll(".watchlist-remove-btn").forEach(function (btn) {
                 btn.addEventListener("click", function () {
                     toggleWatch(this.getAttribute("data-node"));
+                });
+            });
+
+            // Attach expand/collapse handlers on truncated data
+            container.querySelectorAll(".watchlist-traffic-data.expandable").forEach(function (el) {
+                el.addEventListener("click", function () {
+                    var preview = this.querySelector(".data-preview");
+                    var full = this.querySelector(".data-full");
+                    if (full.style.display === "none") {
+                        preview.style.display = "none";
+                        full.style.display = "";
+                    } else {
+                        preview.style.display = "";
+                        full.style.display = "none";
+                    }
                 });
             });
         });

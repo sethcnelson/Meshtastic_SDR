@@ -546,6 +546,19 @@ tr:hover td {
     white-space: nowrap;
 }
 
+.watchlist-traffic-data.expandable {
+    cursor: pointer;
+}
+
+.watchlist-traffic-data.expandable:hover {
+    color: var(--accent);
+}
+
+.watchlist-traffic-data .data-full {
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
 .watchlist-remove-btn {
     background: none;
     border: none;
