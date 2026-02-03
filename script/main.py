@@ -82,7 +82,10 @@ def handle_packet(pkt = None):
     if decrypted:
         #print("[INFO] Decrypted successfully:")
         message = packet.get_message()
-        print("message:", message.to_json())
+        message_json = message.to_json()
+        if isinstance(message_json, str):
+            message_json = json.loads(message_json)
+        print("message:", json.dumps(message_json, indent=2))
     else:
         print("[WARN] no suitable key!")
 
