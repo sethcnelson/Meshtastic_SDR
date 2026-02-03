@@ -80,6 +80,9 @@
     var nodeFilterText = "";
     var nodeFilterTimer = null;
 
+    // Positions cache: { node_id: { latitude, longitude, timestamp } }
+    var positionsMap = {};
+
     // Watch list (array of node_id strings)
     var watchList = [];
 
@@ -351,9 +354,19 @@
             var starClass = isStarred ? "star-btn starred" : "star-btn";
             var starChar = isStarred ? "\u2605" : "\u2606";
 
+            var pos = positionsMap[n.node_id];
+            var pinHtml = "";
+            if (pos) {
+                pinHtml = ' <a href="#" class="coord-link pin-icon" data-lat="' + pos.latitude +
+                    '" data-lng="' + pos.longitude +
+                    '" data-node="' + esc(n.node_id) +
+                    '" title="' + pos.latitude.toFixed(5) + ', ' + pos.longitude.toFixed(5) +
+                    ' (' + fmtTime(pos.timestamp) + ')">\u{1F4CD}</a>';
+            }
+
             return "<tr>" +
                 '<td class="th-star"><button class="' + starClass + '" data-node="' + esc(n.node_id) + '">' + starChar + '</button></td>' +
-                "<td>" + esc(n.node_id) + "</td>" +
+                "<td>" + esc(n.node_id) + pinHtml + "</td>" +
                 "<td>" + displayNodeName(n.long_name, n.short_name, n.node_id) + "</td>" +
                 "<td>" + esc(n.hw) + "</td>" +
                 "<td>" + fmtTime(n.first_seen) + "</td>" +
@@ -368,6 +381,9 @@
                 toggleWatch(this.getAttribute("data-node"));
             });
         });
+
+        // Attach coordinate link handlers
+        attachCoordLinks(tbody);
     }
 
     // ── Traffic ──────────────────────────────────────────────────────────────
@@ -436,15 +452,35 @@
                 ? esc(r.dest_name)
                 : (r.dest_id ? '<span class="node-unnamed-id">' + esc(r.dest_id) + '</span> <span class="node-unnamed">(unresolved)</span>' : "\u2014");
             var dataStr = truncate(r.data || "", 60);
+
+            // Add pin icon for POSITION_APP with valid coordinates
+            var pinHtml = "";
+            if (r.msg_type === "POSITION_APP" && r.data) {
+                try {
+                    var pd = JSON.parse(r.data);
+                    var plat = pd.latitude || 0;
+                    var plng = pd.longitude || 0;
+                    if (plat !== 0 || plng !== 0) {
+                        pinHtml = ' <a href="#" class="coord-link pin-icon" data-lat="' + plat +
+                            '" data-lng="' + plng +
+                            '" data-node="' + esc(r.source_id || "") +
+                            '" title="Show on map">\u{1F4CD}</a>';
+                    }
+                } catch (e) {}
+            }
+
             return "<tr>" +
                 "<td>" + fmtTime(r.timestamp) + "</td>" +
                 "<td>" + srcDisplay + "</td>" +
                 "<td>" + dstDisplay + "</td>" +
-                '<td><span class="badge ' + badgeClass(r.msg_type) + '">' + esc(r.msg_type) + '</span></td>' +
+                '<td><span class="badge ' + badgeClass(r.msg_type) + '">' + esc(r.msg_type) + '</span>' + pinHtml + '</td>' +
                 "<td>" + esc(r.channel_name || "\u2014") + "</td>" +
                 "<td>" + esc(dataStr) + "</td>" +
                 "</tr>";
         }).join("");
+
+        // Attach coordinate link handlers
+        attachCoordLinks(tbody);
     }
 
     // ── Watch List ───────────────────────────────────────────────────────────
@@ -582,6 +618,18 @@
         fetchJSON("/api/positions", function (rows) {
             if (rows.length === 0) return;
 
+            // Update positions cache
+            rows.forEach(function (p) {
+                positionsMap[p.source_id] = {
+                    latitude: p.latitude,
+                    longitude: p.longitude,
+                    timestamp: p.timestamp
+                };
+            });
+
+            // Re-render nodes to pick up pin icons
+            renderNodes();
+
             var bounds = [];
 
             rows.forEach(function (p) {
@@ -602,7 +650,7 @@
                     nameHtml + '</div>' +
                     esc(p.source_id) + "<br>" +
                     p.latitude.toFixed(5) + ", " + p.longitude.toFixed(5) + "<br>" +
-                    "<small>" + fmtTime(p.timestamp) + "</small>";
+                    '<small class="popup-pos-time">Position updated ' + fmtTime(p.timestamp) + '</small>';
 
                 if (markers[p.source_id]) {
                     markers[p.source_id].setLatLng(latlng).setPopupContent(popup);

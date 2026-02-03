@@ -524,6 +524,20 @@ tr:hover td {
     text-decoration: underline;
 }
 
+.pin-icon {
+    text-decoration: none;
+    font-size: 13px;
+    vertical-align: middle;
+}
+
+.pin-icon:hover {
+    text-decoration: none;
+}
+
+.popup-pos-time {
+    color: var(--text-muted);
+}
+
 .watchlist-card-traffic {
     border-top: 1px solid var(--border);
     padding-top: 6px;
