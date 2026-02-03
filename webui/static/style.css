@@ -538,6 +538,33 @@ tr:hover td {
     color: var(--text-muted);
 }
 
+.popup-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 4px 0;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.precision-badge {
+    display: inline-block;
+    background: rgba(210, 153, 34, 0.15);
+    color: var(--orange);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+.pos-detail {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-left: 4px;
+}
+
 .watchlist-card-traffic {
     border-top: 1px solid var(--border);
     padding-top: 6px;

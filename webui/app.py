@@ -105,13 +105,22 @@ def api_positions():
         if lat == 0 and lng == 0:
             continue
 
-        positions.append({
+        entry = {
             "source_id": row["source_id"],
             "source_name": row["source_name"],
             "latitude": lat,
             "longitude": lng,
             "timestamp": row["timestamp"],
-        })
+        }
+        if "precision_bits" in data:
+            entry["precision_bits"] = data["precision_bits"]
+        if "altitude" in data:
+            entry["altitude"] = data["altitude"]
+        if "sats_in_view" in data:
+            entry["sats_in_view"] = data["sats_in_view"]
+        if "ground_speed" in data:
+            entry["ground_speed"] = data["ground_speed"]
+        positions.append(entry)
 
     return jsonify(positions)
 

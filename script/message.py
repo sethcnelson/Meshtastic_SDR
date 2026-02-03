@@ -27,8 +27,18 @@ class Message(object):
 
                     self.data = {
                         "latitude": pos.latitude_i * 1e-7,
-                        "longitude": pos.longitude_i * 1e-7
+                        "longitude": pos.longitude_i * 1e-7,
                     }
+                    if pos.altitude:
+                        self.data["altitude"] = pos.altitude
+                    if pos.precision_bits:
+                        self.data["precision_bits"] = pos.precision_bits
+                    if pos.sats_in_view:
+                        self.data["sats_in_view"] = pos.sats_in_view
+                    if pos.ground_speed:
+                        self.data["ground_speed"] = pos.ground_speed
+                    if pos.ground_track:
+                        self.data["ground_track"] = pos.ground_track
 
                 case 4 : # NODEINFO_APP
                     self.type = "NODEINFO_APP"

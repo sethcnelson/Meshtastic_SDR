@@ -466,11 +466,16 @@
             var pos = positionsMap[n.node_id];
             var pinHtml = "";
             if (pos) {
+                var pinTitle = pos.latitude.toFixed(5) + ', ' + pos.longitude.toFixed(5);
+                var pinDetails = positionDetails(pos);
+                if (pinDetails.length > 0) {
+                    pinTitle += ' | ' + pinDetails.join(' | ');
+                }
+                pinTitle += ' (' + fmtTime(pos.timestamp) + ')';
                 pinHtml = ' <a href="#" class="coord-link pin-icon" data-lat="' + pos.latitude +
                     '" data-lng="' + pos.longitude +
                     '" data-node="' + esc(n.node_id) +
-                    '" title="' + pos.latitude.toFixed(5) + ', ' + pos.longitude.toFixed(5) +
-                    ' (' + fmtTime(pos.timestamp) + ')">\u{1F4CD}</a>';
+                    '" title="' + esc(pinTitle) + '">\u{1F4CD}</a>';
             }
 
             return "<tr>" +
@@ -628,11 +633,31 @@
 
                 var posHtml = "";
                 if (item.position) {
+                    // Parse precision from the position data if available
+                    var wlPrec = null;
+                    // Check the cached positionsMap for extra fields
+                    var cachedPos = positionsMap[node.node_id];
+                    if (cachedPos && cachedPos.precision_bits != null) {
+                        wlPrec = cachedPos.precision_bits;
+                    }
+                    var precHtml = "";
+                    if (wlPrec != null) {
+                        precHtml = ' <span class="precision-badge">' + esc(precisionLabel(wlPrec)) + '</span>';
+                    }
+                    var altHtml = "";
+                    if (cachedPos && cachedPos.altitude != null) {
+                        altHtml = ' <span class="pos-detail">Alt: ' + cachedPos.altitude + 'm</span>';
+                    }
+                    var satsHtml = "";
+                    if (cachedPos && cachedPos.sats_in_view != null) {
+                        satsHtml = ' <span class="pos-detail">Sats: ' + cachedPos.sats_in_view + '</span>';
+                    }
                     posHtml = '<div class="watchlist-card-position">' +
                         '<a href="#" class="coord-link" data-lat="' + item.position.latitude + '" data-lng="' + item.position.longitude + '" data-node="' + esc(node.node_id || "") + '">' +
                         item.position.latitude.toFixed(5) + ", " + item.position.longitude.toFixed(5) +
                         '</a>' +
                         " (" + fmtTime(item.position.timestamp) + ")" +
+                        precHtml + altHtml + satsHtml +
                         '</div>';
                 }
 
@@ -732,7 +757,11 @@
                 positionsMap[p.source_id] = {
                     latitude: p.latitude,
                     longitude: p.longitude,
-                    timestamp: p.timestamp
+                    timestamp: p.timestamp,
+                    precision_bits: p.precision_bits,
+                    altitude: p.altitude,
+                    sats_in_view: p.sats_in_view,
+                    ground_speed: p.ground_speed
                 };
             });
 
@@ -754,11 +783,20 @@
                 var isStarred = watchList.indexOf(p.source_id) !== -1;
                 var starChar = isStarred ? "\u2605" : "\u2606";
                 var starClass = isStarred ? "star-btn starred" : "star-btn";
+                var detailParts = positionDetails(p);
+                var detailHtml = "";
+                if (detailParts.length > 0) {
+                    detailHtml = '<div class="popup-details">' +
+                        detailParts.map(function (d) { return '<span>' + esc(d) + '</span>'; }).join("") +
+                        '</div>';
+                }
+
                 var popup = '<div class="popup-header">' +
                     '<button class="' + starClass + ' popup-star" data-node="' + esc(p.source_id) + '">' + starChar + '</button> ' +
                     nameHtml + '</div>' +
                     esc(p.source_id) + "<br>" +
                     p.latitude.toFixed(5) + ", " + p.longitude.toFixed(5) + "<br>" +
+                    detailHtml +
                     '<small class="popup-pos-time">Position updated ' + fmtTime(p.timestamp) + '</small>';
 
                 if (markers[p.source_id]) {
@@ -801,6 +839,30 @@
                 panToNode(lat, lng, nodeId);
             });
         });
+    }
+
+    // ── Position Precision Helper ────────────────────────────────────────────
+    function precisionLabel(bits) {
+        if (bits == null) return null;
+        if (bits === 0) return "Disabled";
+        if (bits >= 32) return "Full (~1cm)";
+        if (bits >= 23) return "High (~1m)";
+        if (bits >= 19) return "Med (~75m)";
+        if (bits >= 16) return "Low (~600m)";
+        if (bits >= 14) return "City (~2.4km)";
+        if (bits >= 13) return "Region (~4.8km)";
+        if (bits >= 11) return "Area (~19km)";
+        return "Coarse (~" + Math.round(40075000 / Math.pow(2, bits)) + "m)";
+    }
+
+    function positionDetails(p) {
+        var parts = [];
+        var prec = precisionLabel(p.precision_bits);
+        if (prec) parts.push("Precision: " + prec + " (" + p.precision_bits + " bits)");
+        if (p.altitude != null) parts.push("Alt: " + p.altitude + "m");
+        if (p.sats_in_view != null) parts.push("Sats: " + p.sats_in_view);
+        if (p.ground_speed != null) parts.push("Speed: " + p.ground_speed + " km/h");
+        return parts;
     }
 
     // ── Utilities ────────────────────────────────────────────────────────────
