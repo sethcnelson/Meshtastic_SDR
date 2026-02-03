@@ -46,4 +46,29 @@ Dependency: https://github.com/tapparelj/gr-lora_sdr
 
 Note: Meshtastic is a trademark by these fine folks! https://meshtastic.org . We wouldn't be doing SDR shenanigans without'em!
 
+## Database Queries
+The SQLlite db used to log traffic and node specifics can be queried thusly:
+You can query it directly with sqlite3:                                                                        
+                                                                                                                 
+  ### See all known nodes                                                                                          
+  `sqlite3 mesh.db "SELECT node_id, long_name, short_name, hw_model, first_seen, last_seen FROM nodes;"`           
+                                                                                                                 
+  ### Recent traffic                                                                                               
+  `sqlite3 mesh.db "SELECT timestamp, source_name, dest_name, msg_type FROM traffic ORDER BY id DESC LIMIT 20;"`   
+                                                                                                                 
+  ### Traffic counts by message type                                                                               
+  `sqlite3 mesh.db "SELECT msg_type, COUNT(*) as count FROM traffic GROUP BY msg_type ORDER BY count DESC;"`       
+                                                                                                                 
+  ### Traffic counts per node                                                                                      
+  `sqlite3 mesh.db "SELECT source_name, COUNT(*) as count FROM traffic GROUP BY source_name ORDER BY count DESC;"` 
+                                                                                                                 
+  ### Nodes with position data                                                                                     
+  `sqlite3 mesh.db "SELECT source_name, data FROM traffic WHERE msg_type = 'POSITION_APP' ORDER BY id DESC;"`      
+                                                                                                                 
+  ### For a dashboard/map, the position data is already being logged as JSON in the data column (latitude/longitude  
+  from POSITION_APP). You could pull that with something like:                                                   
+                                                                                                                 
+  `sqlite3 -json mesh.db "SELECT source_name, source_id, json_extract(data, '$.latitude') as lat,                 
+  json_extract(data, '$.longitude') as lon, timestamp FROM traffic WHERE msg_type = 'POSITION_APP' ORDER BY id   
+  DESC;"`                          
 ![](public/US_all_preset_capture.png)

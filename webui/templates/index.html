@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meshtastic SDR Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Meshtastic SDR Dashboard</h1>
+        <span id="last-update" class="muted">—</span>
+    </header>
+
+    <main class="grid">
+        <!-- Stats Panel -->
+        <section id="panel-stats" class="panel">
+            <h2>Stats</h2>
+            <div class="stats-cards">
+                <div class="stat-card">
+                    <span class="stat-value" id="stat-nodes">—</span>
+                    <span class="stat-label">Nodes</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value" id="stat-packets">—</span>
+                    <span class="stat-label">Total Packets</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value" id="stat-24h">—</span>
+                    <span class="stat-label">Last 24h</span>
+                </div>
+            </div>
+            <h3>Packets by Type</h3>
+            <ul id="by-type-list" class="by-type-list">
+                <li class="muted">No data yet</li>
+            </ul>
+        </section>
+
+        <!-- Map Panel -->
+        <section id="panel-map" class="panel">
+            <h2>Node Map</h2>
+            <div id="map"></div>
+        </section>
+
+        <!-- Node Directory Panel -->
+        <section id="panel-nodes" class="panel">
+            <h2>Node Directory</h2>
+            <div class="table-wrap">
+                <table id="nodes-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>HW Model</th>
+                            <th>First Seen</th>
+                            <th>Last Seen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td colspan="5" class="muted">No data yet</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Traffic Feed Panel -->
+        <section id="panel-traffic" class="panel">
+            <h2>Traffic Feed</h2>
+            <div class="filters">
+                <select id="filter-type">
+                    <option value="">All Types</option>
+                </select>
+                <input type="text" id="filter-node" placeholder="Filter by node ID/name">
+            </div>
+            <div class="table-wrap">
+                <table id="traffic-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Source</th>
+                            <th>Dest</th>
+                            <th>Type</th>
+                            <th>Channel</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td colspan="6" class="muted">No data yet</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>
