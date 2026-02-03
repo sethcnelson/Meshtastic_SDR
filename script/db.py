@@ -97,11 +97,29 @@ def resolve_name(node_id):
         return short_name
     return node_id
 
+def ensure_node(node_id, timestamp=None):
+    """Create a minimal nodes row if this node_id has never been seen."""
+    if _conn is None or not node_id or node_id == "ffffffff":
+        return
+    if timestamp is None:
+        timestamp = datetime.now(timezone.utc).isoformat()
+    else:
+        timestamp = str(timestamp)
+    _conn.execute("""
+        INSERT INTO nodes (node_id, first_seen, last_seen)
+        VALUES (?, ?, ?)
+        ON CONFLICT(node_id) DO UPDATE SET
+            last_seen = excluded.last_seen
+    """, (node_id, timestamp, timestamp))
+
+
 def log_traffic(timestamp, source_id, dest_id, packet_id=None, channel_hash=None,
                 channel_name=None, port_num=None, msg_type="UNKNOWN", data=None, key_used=None):
     if _conn is None:
         return
     import json as _json
+    ensure_node(source_id, timestamp)
+    ensure_node(dest_id, timestamp)
     source_name = resolve_name(source_id)
     dest_name = resolve_name(dest_id)
 

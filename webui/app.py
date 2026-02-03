@@ -31,40 +31,12 @@ def index():
 
 @app.route("/api/nodes")
 def api_nodes():
-    # Nodes with NODEINFO (have a row in the nodes table)
     rows = db_conn.execute(
         "SELECT node_id, long_name, short_name, hw_model, role, "
         "       first_seen, last_seen "
         "FROM nodes ORDER BY last_seen DESC"
     ).fetchall()
-    result = [dict(r) for r in rows]
-    known_ids = {r["node_id"] for r in rows}
-
-    # Nodes seen only in traffic (no NODEINFO received yet)
-    unresolved = db_conn.execute(
-        "SELECT source_id AS node_id, "
-        "       MIN(timestamp) AS first_seen, "
-        "       MAX(timestamp) AS last_seen "
-        "FROM traffic "
-        "WHERE source_id IS NOT NULL AND source_id != '' "
-        "GROUP BY source_id"
-    ).fetchall()
-
-    for r in unresolved:
-        if r["node_id"] not in known_ids:
-            result.append({
-                "node_id": r["node_id"],
-                "long_name": None,
-                "short_name": None,
-                "hw_model": None,
-                "role": None,
-                "first_seen": r["first_seen"],
-                "last_seen": r["last_seen"],
-            })
-
-    # Sort all by last_seen descending
-    result.sort(key=lambda n: n.get("last_seen") or "", reverse=True)
-    return jsonify(result)
+    return jsonify([dict(r) for r in rows])
 
 
 @app.route("/api/traffic")
