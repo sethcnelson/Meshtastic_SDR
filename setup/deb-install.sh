@@ -161,6 +161,7 @@ if [ "$GNURADIO_INSTALLED" = false ]; then
         libsndfile1-dev \
         libfftw3-dev \
         libvolk-dev \
+        sqlite3 \
         tmux \
         nano
 
