@@ -370,6 +370,14 @@ tr:hover td {
     background: rgba(88, 166, 255, 0.04);
 }
 
+tr.node-row {
+    cursor: pointer;
+}
+
+tr.node-row:hover td {
+    background: rgba(88, 166, 255, 0.08);
+}
+
 /* ── Star Button ─────────────────────────────────────────────────────────── */
 
 .star-btn {

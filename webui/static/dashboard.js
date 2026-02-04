@@ -486,7 +486,7 @@
                     '" title="' + esc(pinTitle) + '">\u{1F4CD}</a>';
             }
 
-            var rowHtml = "<tr>" +
+            var rowHtml = '<tr class="node-row" data-node="' + esc(n.node_id) + '">' +
                 '<td class="th-star"><button class="' + starClass + '" data-node="' + esc(n.node_id) + '">' + starChar + '</button>' +
                 '<button class="telemetry-toggle" data-node="' + esc(n.node_id) + '" title="Toggle telemetry">' + toggleChar + '</button></td>' +
                 "<td>" + esc(n.node_id) + pinHtml + "</td>" +
@@ -512,6 +512,16 @@
             btn.addEventListener("click", function (e) {
                 e.stopPropagation();
                 toggleTelemetry(this.getAttribute("data-node"));
+            });
+        });
+
+        // Make entire row clickable to toggle telemetry (except stars, links, buttons)
+        tbody.querySelectorAll("tr.node-row").forEach(function (row) {
+            row.addEventListener("click", function (e) {
+                // Don't trigger if user clicked a button, link, or inside the detail row
+                if (e.target.closest("button, a, .telemetry-detail")) return;
+                var nodeId = this.getAttribute("data-node");
+                if (nodeId) toggleTelemetry(nodeId);
             });
         });
 
@@ -884,9 +894,27 @@
         if (telemetryCache[nodeId] === "loading") return;
         telemetryCache[nodeId] = "loading";
 
+        // Fetch telemetry and recent traffic in parallel
+        var telemDone = false, trafficDone = false;
+        var telemData = null, trafficItems = null;
+
+        function tryRender() {
+            if (telemDone && trafficDone) {
+                telemetryCache[nodeId] = { telemetry: telemData, traffic: trafficItems };
+                renderTelemetryRow(nodeId);
+            }
+        }
+
         fetchJSON("/api/node_telemetry?node=" + encodeURIComponent(nodeId), function (data) {
-            telemetryCache[nodeId] = data;
-            renderTelemetryRow(nodeId);
+            telemData = data;
+            telemDone = true;
+            tryRender();
+        });
+
+        fetchJSON("/api/watchlist?nodes=" + encodeURIComponent(nodeId), function (data) {
+            trafficItems = (data && data.length > 0) ? data[0].traffic : [];
+            trafficDone = true;
+            tryRender();
         });
     }
 
@@ -940,8 +968,11 @@
     function renderTelemetryRow(nodeId) {
         if (!expandedTelemetry[nodeId]) return;
 
-        var data = telemetryCache[nodeId];
-        if (!data || data === "loading") return;
+        var cached = telemetryCache[nodeId];
+        if (!cached || cached === "loading") return;
+
+        var data = cached.telemetry || {};
+        var trafficList = cached.traffic || [];
 
         var html = "";
 
@@ -1021,7 +1052,64 @@
             html = '<div class="telemetry-no-data">No telemetry data available for this node</div>';
         }
 
+        // Add recent traffic section
+        if (trafficList.length > 0) {
+            var trafficEntries = trafficList.map(function (t) {
+                var raw = t.data || "";
+                var needsExpand = raw.length > 50;
+                var preview = truncate(raw, 50);
+                var posLink = "";
+                if (t.msg_type === "POSITION_APP" && raw) {
+                    try {
+                        var pd = JSON.parse(raw);
+                        if ((pd.latitude || 0) !== 0 || (pd.longitude || 0) !== 0) {
+                            posLink = ' <a href="#" class="coord-link pin-icon" data-lat="' + pd.latitude +
+                                '" data-lng="' + pd.longitude +
+                                '" data-node="' + esc(t.source_id || nodeId) +
+                                '" title="Show on map">\u{1F4CD}</a>';
+                        }
+                    } catch (e) {}
+                }
+                var dataHtml;
+                if (needsExpand) {
+                    dataHtml = '<span class="watchlist-traffic-data expandable">' +
+                        '<span class="data-preview">' + esc(preview) + '</span>' +
+                        '<span class="data-full" style="display:none">' + esc(raw) + '</span></span>';
+                } else {
+                    dataHtml = '<span class="watchlist-traffic-data">' + esc(raw) + '</span>';
+                }
+                return '<div class="watchlist-traffic-entry">' +
+                    encryptionIcon(t.key_used) +
+                    '<span class="watchlist-traffic-time">' + fmtTime(t.timestamp) + '</span>' +
+                    '<span class="badge ' + badgeClass(t.msg_type) + '">' + esc(t.msg_type) + '</span>' +
+                    dataHtml + posLink + '</div>';
+            }).join("");
+
+            html += '<div class="telemetry-section">' +
+                '<div class="telemetry-section-title">Recent Activity</div>' +
+                trafficEntries + '</div>';
+        }
+
         insertTelemetryRow(nodeId, html);
+
+        // Wire up expand/collapse and coord links in the detail row
+        var detailRow = document.getElementById("telem-" + nodeId);
+        if (detailRow) {
+            detailRow.querySelectorAll(".watchlist-traffic-data.expandable").forEach(function (el) {
+                el.addEventListener("click", function () {
+                    var preview = this.querySelector(".data-preview");
+                    var full = this.querySelector(".data-full");
+                    if (full.style.display === "none") {
+                        preview.style.display = "none";
+                        full.style.display = "";
+                    } else {
+                        preview.style.display = "";
+                        full.style.display = "none";
+                    }
+                });
+            });
+            attachCoordLinks(detailRow);
+        }
     }
 
     function renderTelemetrySection(title, data, timestamp, fieldDefs) {
