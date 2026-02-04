@@ -94,6 +94,20 @@ def handle_packet(pkt = None):
             is_public = False
         encryption_type = "public" if is_public else "private"
 
+    # Parse flags byte: bits 0-2 = hop_limit, bit 3 = want_ack, bit 4 = via_mqtt
+    flags_raw = packet.get_flags()
+    hop_limit = None
+    want_ack = False
+    via_mqtt = False
+    if flags_raw:
+        try:
+            flags_int = int(flags_raw, 16)
+            hop_limit = flags_int & 0x07
+            want_ack = bool(flags_int & 0x08)
+            via_mqtt = bool(flags_int & 0x10)
+        except (ValueError, TypeError):
+            pass
+
     # Log every packet to packets_raw (decrypted or not)
     raw_size = len(pkt) if pkt else 0
     log_raw_packet(
@@ -102,7 +116,10 @@ def handle_packet(pkt = None):
         dest_id=packet.get_dest(),
         packet_id=packet.get_packet_id(),
         channel_hash=packet.get_channel_hash(),
-        flags=packet.get_flags(),
+        flags=flags_raw,
+        hop_limit=hop_limit,
+        want_ack=want_ack,
+        via_mqtt=via_mqtt,
         packet_size=raw_size,
         decrypted=decrypted,
         key_used=encryption_type,

@@ -59,7 +59,38 @@ class Message(object):
 
                     routing = mesh_pb2.Routing()
                     routing.ParseFromString(data.payload)
-                    self.data = str(routing)
+                    rdata = {}
+                    if routing.HasField("route_request"):
+                        rdata["variant"] = "route_request"
+                        rr = routing.route_request
+                        rdata["route"] = [format(n, '08x') for n in rr.route]
+                        if list(rr.snr_towards):
+                            rdata["snr_towards"] = list(rr.snr_towards)
+                        if list(rr.route_back):
+                            rdata["route_back"] = [format(n, '08x') for n in rr.route_back]
+                        if list(rr.snr_back):
+                            rdata["snr_back"] = list(rr.snr_back)
+                    elif routing.HasField("route_reply"):
+                        rdata["variant"] = "route_reply"
+                        rr = routing.route_reply
+                        rdata["route"] = [format(n, '08x') for n in rr.route]
+                        if list(rr.snr_towards):
+                            rdata["snr_towards"] = list(rr.snr_towards)
+                        if list(rr.route_back):
+                            rdata["route_back"] = [format(n, '08x') for n in rr.route_back]
+                        if list(rr.snr_back):
+                            rdata["snr_back"] = list(rr.snr_back)
+                    elif routing.error_reason:
+                        rdata["variant"] = "error"
+                        rdata["error_reason"] = routing.error_reason
+                        # Map enum to name
+                        try:
+                            rdata["error_name"] = mesh_pb2.Routing.Error.Name(routing.error_reason)
+                        except ValueError:
+                            rdata["error_name"] = str(routing.error_reason)
+                    else:
+                        rdata["variant"] = "ack"
+                    self.data = rdata
 
                 case 6 : # ADMIN_APP
                     self.type = "ADMIN_APP"
@@ -251,14 +282,34 @@ class Message(object):
 
                     trct = mesh_pb2.RouteDiscovery()
                     trct.ParseFromString(data.payload)
-                    self.data = str(trct)
+                    tdata = {}
+                    tdata["route"] = [format(n, '08x') for n in trct.route]
+                    if list(trct.snr_towards):
+                        tdata["snr_towards"] = list(trct.snr_towards)
+                    if list(trct.route_back):
+                        tdata["route_back"] = [format(n, '08x') for n in trct.route_back]
+                    if list(trct.snr_back):
+                        tdata["snr_back"] = list(trct.snr_back)
+                    self.data = tdata
 
                 case 71 : # NEIGHBORINFO_APP
                     self.type = "NEIGHBORINFO_APP"
 
                     ninfo = mesh_pb2.NeighborInfo()
                     ninfo.ParseFromString(data.payload)
-                    self.data = str(ninfo)
+                    ndata = {
+                        "node_id": format(ninfo.node_id, '08x') if ninfo.node_id else None,
+                        "last_sent_by_id": format(ninfo.last_sent_by_id, '08x') if ninfo.last_sent_by_id else None,
+                        "node_broadcast_interval_secs": ninfo.node_broadcast_interval_secs or None,
+                    }
+                    neighbors = []
+                    for nb in ninfo.neighbors:
+                        entry = {"node_id": format(nb.node_id, '08x') if nb.node_id else None}
+                        if nb.snr:
+                            entry["snr"] = nb.snr
+                        neighbors.append(entry)
+                    ndata["neighbors"] = neighbors
+                    self.data = ndata
 
                 case 72 : # ATAK_PLUGIN
                     self.type = "ATAK_PLUGIN"

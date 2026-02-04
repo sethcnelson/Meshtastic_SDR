@@ -138,7 +138,9 @@
         POSITION_APP: "badge-position",
         TELEMETRY_APP: "badge-telemetry",
         NODEINFO_APP: "badge-nodeinfo",
-        ROUTING_APP: "badge-routing"
+        ROUTING_APP: "badge-routing",
+        TRACEROUTE_APP: "badge-routing",
+        NEIGHBORINFO_APP: "badge-nodeinfo"
     };
 
     // ── Tile Layer Providers ─────────────────────────────────────────────────
@@ -796,6 +798,11 @@
             renderRfMetrics(data);
             renderChannelUtil(data.channel_utilization || []);
             renderHourlyChart(data.hourly || []);
+            renderPacketDetails(data);
+        });
+        fetchJSON("/api/metrics/activity", function (data) {
+            renderActiveNodes(data.top_nodes || []);
+            renderPosFrequency(data.position_frequency || []);
         });
     }
 
@@ -887,6 +894,106 @@
                 '<span><span class="hourly-legend-dot decrypted"></span>Decrypted</span>' +
                 '<span><span class="hourly-legend-dot undecrypted"></span>Undecrypted</span>' +
             '</div>';
+    }
+
+    function renderPacketDetails(data) {
+        var container = document.getElementById("packet-details");
+
+        var html = "";
+
+        // Hop count distribution
+        var hops = data.hop_distribution || [];
+        if (hops.length > 0) {
+            html += '<div class="rf-section-label">Hop Limit Distribution</div>';
+            hops.forEach(function (h) {
+                html += rfRow("Hop " + h.hop_limit, h.cnt.toLocaleString(), "");
+            });
+        }
+
+        // Packet sizes
+        var sizes = data.packet_sizes;
+        if (sizes) {
+            html += '<div class="rf-section-label">Packet Size (bytes)</div>';
+            html += rfRow("Average", sizes.avg + "", "");
+            html += rfRow("Min", sizes.min + "", "");
+            html += rfRow("Max", sizes.max + "", "");
+        }
+
+        // Duplicates
+        var dups = data.duplicates;
+        if (dups) {
+            html += '<div class="rf-section-label">Packet Duplicates</div>';
+            html += rfRow("IDs with dupes", dups.unique_packet_ids_with_dupes.toLocaleString(), "");
+            html += rfRow("Total packets", dups.total_packets.toLocaleString(), "");
+        }
+
+        // Via MQTT
+        if (data.via_mqtt) {
+            html += '<div class="rf-section-label">MQTT</div>';
+            html += rfRow("Via MQTT", data.via_mqtt.toLocaleString(), "");
+        }
+
+        if (!html) {
+            container.innerHTML = '<p class="muted">No packet data yet</p>';
+            return;
+        }
+
+        container.innerHTML = html;
+    }
+
+    function renderActiveNodes(nodes) {
+        var container = document.getElementById("active-nodes");
+        if (nodes.length === 0) {
+            container.innerHTML = '<p class="muted">No activity data</p>';
+            return;
+        }
+
+        container.innerHTML = nodes.map(function (n, i) {
+            var name = n.source_name || n.source_id;
+            // Build sparkline from hourly data (24 bars, 00-23)
+            var hourly = n.hourly || {};
+            var maxH = 1;
+            for (var h = 0; h < 24; h++) {
+                var key = (h < 10 ? "0" : "") + h;
+                var val = hourly[key] || 0;
+                if (val > maxH) maxH = val;
+            }
+            var sparkBars = "";
+            for (var h = 0; h < 24; h++) {
+                var key = (h < 10 ? "0" : "") + h;
+                var val = hourly[key] || 0;
+                var pct = Math.round((val / maxH) * 100);
+                sparkBars += '<div class="sparkline-bar" style="height:' + Math.max(pct, 3) + '%" title="' + key + ':00 — ' + val + ' pkts"></div>';
+            }
+
+            return '<div class="active-node-entry">' +
+                '<span class="active-node-rank">' + (i + 1) + '</span>' +
+                '<span class="active-node-name" title="' + esc(name) + '">' + esc(name) + '</span>' +
+                '<span class="active-node-count">' + n.pkt_count + '</span>' +
+                '<div class="active-node-sparkline">' + sparkBars + '</div>' +
+                '</div>';
+        }).join("");
+    }
+
+    function renderPosFrequency(entries) {
+        var container = document.getElementById("pos-frequency");
+        if (entries.length === 0) {
+            container.innerHTML = '<p class="muted">No position data</p>';
+            return;
+        }
+
+        container.innerHTML = entries.map(function (e) {
+            var name = e.source_name || e.source_id;
+            var interval;
+            if (e.avg_interval_secs < 60) {
+                interval = e.avg_interval_secs + "s";
+            } else if (e.avg_interval_secs < 3600) {
+                interval = Math.round(e.avg_interval_secs / 60) + "m";
+            } else {
+                interval = Math.round(e.avg_interval_secs / 3600) + "h";
+            }
+            return rfRow(esc(name), e.pos_count + " (\u00F8 " + interval + ")", "");
+        }).join("");
     }
 
     // ── Node Telemetry ──────────────────────────────────────────────────────

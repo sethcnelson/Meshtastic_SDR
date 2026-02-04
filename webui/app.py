@@ -347,7 +347,121 @@ def api_metrics():
             })
     result["channel_utilization"] = channel_util
 
+    # ── Hop count distribution (from packets_raw) ──────────────────────────
+    if has_raw:
+        hop_rows = db_conn.execute(
+            "SELECT hop_limit, COUNT(*) AS cnt FROM packets_raw "
+            "WHERE hop_limit IS NOT NULL "
+            "GROUP BY hop_limit ORDER BY hop_limit"
+        ).fetchall()
+        result["hop_distribution"] = [dict(r) for r in hop_rows]
+
+        # Average packet size
+        size_row = db_conn.execute(
+            "SELECT AVG(packet_size) AS avg_size, MIN(packet_size) AS min_size, "
+            "       MAX(packet_size) AS max_size "
+            "FROM packets_raw WHERE packet_size > 0"
+        ).fetchone()
+        result["packet_sizes"] = {
+            "avg": round(size_row["avg_size"], 1) if size_row["avg_size"] else 0,
+            "min": size_row["min_size"] or 0,
+            "max": size_row["max_size"] or 0,
+        }
+
+        # Duplicate packet detection (same packet_id seen multiple times)
+        dup_row = db_conn.execute(
+            "SELECT COUNT(*) AS dup_count FROM ("
+            "  SELECT packet_id FROM packets_raw "
+            "  WHERE packet_id IS NOT NULL "
+            "  GROUP BY packet_id HAVING COUNT(*) > 1"
+            ")"
+        ).fetchone()
+        total_raw = db_conn.execute("SELECT COUNT(*) FROM packets_raw").fetchone()[0]
+        result["duplicates"] = {
+            "unique_packet_ids_with_dupes": dup_row["dup_count"],
+            "total_packets": total_raw,
+        }
+
+        # Via MQTT count
+        mqtt_row = db_conn.execute(
+            "SELECT SUM(CASE WHEN via_mqtt = 1 THEN 1 ELSE 0 END) AS mqtt_ct "
+            "FROM packets_raw"
+        ).fetchone()
+        result["via_mqtt"] = mqtt_row["mqtt_ct"] or 0
+    else:
+        result["hop_distribution"] = []
+        result["packet_sizes"] = None
+        result["duplicates"] = None
+        result["via_mqtt"] = 0
+
     return jsonify(result)
+
+
+@app.route("/api/metrics/activity")
+def api_metrics_activity():
+    """Per-node activity patterns over the last 24 hours."""
+    # Top 20 most active nodes in last 24h
+    rows = db_conn.execute(
+        "SELECT source_id, source_name, COUNT(*) AS pkt_count, "
+        "       COUNT(DISTINCT msg_type) AS type_count "
+        "FROM traffic "
+        "WHERE timestamp >= datetime('now', '-1 day') "
+        "GROUP BY source_id "
+        "ORDER BY pkt_count DESC LIMIT 20"
+    ).fetchall()
+
+    nodes = []
+    for r in rows:
+        # Per-hour breakdown for this node
+        hourly = db_conn.execute(
+            "SELECT strftime('%H', timestamp) AS hour, COUNT(*) AS cnt "
+            "FROM traffic "
+            "WHERE source_id = ? AND timestamp >= datetime('now', '-1 day') "
+            "GROUP BY hour ORDER BY hour",
+            (r["source_id"],),
+        ).fetchall()
+        hourly_map = {h["hour"]: h["cnt"] for h in hourly}
+
+        nodes.append({
+            "source_id": r["source_id"],
+            "source_name": r["source_name"],
+            "pkt_count": r["pkt_count"],
+            "type_count": r["type_count"],
+            "hourly": hourly_map,
+        })
+
+    # Position update frequency — average interval between POSITION_APP per node
+    pos_freq = db_conn.execute(
+        "SELECT source_id, source_name, COUNT(*) AS pos_count, "
+        "       MIN(timestamp) AS first_pos, MAX(timestamp) AS last_pos "
+        "FROM traffic "
+        "WHERE msg_type = 'POSITION_APP' AND timestamp >= datetime('now', '-1 day') "
+        "GROUP BY source_id HAVING pos_count >= 2 "
+        "ORDER BY pos_count DESC LIMIT 20"
+    ).fetchall()
+
+    pos_frequency = []
+    for r in pos_freq:
+        try:
+            from datetime import datetime
+            first = datetime.fromisoformat(r["first_pos"])
+            last = datetime.fromisoformat(r["last_pos"])
+            span = (last - first).total_seconds()
+            avg_interval = span / (r["pos_count"] - 1) if r["pos_count"] > 1 else 0
+        except Exception:
+            avg_interval = 0
+
+        pos_frequency.append({
+            "source_id": r["source_id"],
+            "source_name": r["source_name"],
+            "pos_count": r["pos_count"],
+            "avg_interval_secs": round(avg_interval),
+        })
+
+    return jsonify({
+        "top_nodes": nodes,
+        "position_frequency": pos_frequency,
+    })
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

@@ -51,6 +51,9 @@ def init_db(debug=False):
             packet_id    TEXT,
             channel_hash TEXT,
             flags        TEXT,
+            hop_limit    INTEGER,
+            want_ack     INTEGER,
+            via_mqtt     INTEGER,
             packet_size  INTEGER,
             decrypted    INTEGER NOT NULL DEFAULT 0,
             key_used     TEXT
@@ -155,17 +158,20 @@ def log_traffic(timestamp, source_id, dest_id, packet_id=None, channel_hash=None
     _conn.commit()
 
 def log_raw_packet(timestamp, source_id, dest_id, packet_id=None,
-                   channel_hash=None, flags=None, packet_size=None,
+                   channel_hash=None, flags=None, hop_limit=None,
+                   want_ack=None, via_mqtt=None, packet_size=None,
                    decrypted=False, key_used=None):
     if _conn is None:
         return
     _conn.execute("""
         INSERT INTO packets_raw (timestamp, source_id, dest_id, packet_id,
-                                 channel_hash, flags, packet_size, decrypted, key_used)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                 channel_hash, flags, hop_limit, want_ack,
+                                 via_mqtt, packet_size, decrypted, key_used)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (str(timestamp), source_id, dest_id, packet_id,
-          channel_hash, flags, packet_size,
-          1 if decrypted else 0, key_used))
+          channel_hash, flags, hop_limit,
+          1 if want_ack else 0, 1 if via_mqtt else 0,
+          packet_size, 1 if decrypted else 0, key_used))
     _conn.commit()
 
 
