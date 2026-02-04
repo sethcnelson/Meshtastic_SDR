@@ -215,6 +215,141 @@ def api_stats():
     })
 
 
+@app.route("/api/node_telemetry")
+def api_node_telemetry():
+    node_id = request.args.get("node", "").strip()
+    if not node_id:
+        return jsonify(None)
+
+    # Fetch the latest telemetry entries by sub-type for this node
+    rows = db_conn.execute(
+        "SELECT data, timestamp FROM traffic "
+        "WHERE source_id = ? AND msg_type = 'TELEMETRY_APP' "
+        "ORDER BY id DESC LIMIT 20",
+        (node_id,),
+    ).fetchall()
+
+    result = {"device": None, "environment": None, "power": None,
+              "air_quality": None, "local_stats": None}
+
+    for row in rows:
+        try:
+            data = json.loads(row["data"]) if row["data"] else {}
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        ttype = data.get("telemetry_type")
+        if ttype and ttype in result and result[ttype] is None:
+            result[ttype] = {"data": data, "timestamp": row["timestamp"]}
+
+        # Stop early if we have all types
+        if all(v is not None for v in result.values()):
+            break
+
+    return jsonify(result)
+
+
+def _safe_table_exists(table_name):
+    """Check if a table exists in the database."""
+    row = db_conn.execute(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
+        (table_name,),
+    ).fetchone()
+    return row[0] > 0
+
+
+@app.route("/api/metrics")
+def api_metrics():
+    result = {}
+
+    # ── Decryption tallies (from packets_raw if available) ────────────────
+    has_raw = _safe_table_exists("packets_raw")
+
+    if has_raw:
+        totals = db_conn.execute(
+            "SELECT "
+            "  COUNT(*) AS total, "
+            "  SUM(CASE WHEN decrypted = 1 THEN 1 ELSE 0 END) AS decrypted, "
+            "  SUM(CASE WHEN decrypted = 0 THEN 1 ELSE 0 END) AS undecrypted, "
+            "  SUM(CASE WHEN key_used = 'public' THEN 1 ELSE 0 END) AS public_ct, "
+            "  SUM(CASE WHEN key_used = 'private' THEN 1 ELSE 0 END) AS private_ct "
+            "FROM packets_raw"
+        ).fetchone()
+        result["rf_totals"] = {
+            "total": totals["total"],
+            "decrypted": totals["decrypted"],
+            "undecrypted": totals["undecrypted"],
+            "public": totals["public_ct"],
+            "private": totals["private_ct"],
+        }
+
+        # 24h breakdown
+        totals_24h = db_conn.execute(
+            "SELECT "
+            "  COUNT(*) AS total, "
+            "  SUM(CASE WHEN decrypted = 1 THEN 1 ELSE 0 END) AS decrypted, "
+            "  SUM(CASE WHEN decrypted = 0 THEN 1 ELSE 0 END) AS undecrypted, "
+            "  SUM(CASE WHEN key_used = 'public' THEN 1 ELSE 0 END) AS public_ct, "
+            "  SUM(CASE WHEN key_used = 'private' THEN 1 ELSE 0 END) AS private_ct "
+            "FROM packets_raw WHERE timestamp >= datetime('now', '-1 day')"
+        ).fetchone()
+        result["rf_totals_24h"] = {
+            "total": totals_24h["total"],
+            "decrypted": totals_24h["decrypted"],
+            "undecrypted": totals_24h["undecrypted"],
+            "public": totals_24h["public_ct"],
+            "private": totals_24h["private_ct"],
+        }
+
+        # Hourly packet counts (last 24h) for graphing
+        hourly = db_conn.execute(
+            "SELECT strftime('%Y-%m-%dT%H:00:00', timestamp) AS hour, "
+            "  COUNT(*) AS total, "
+            "  SUM(CASE WHEN decrypted = 1 THEN 1 ELSE 0 END) AS decrypted, "
+            "  SUM(CASE WHEN decrypted = 0 THEN 1 ELSE 0 END) AS undecrypted "
+            "FROM packets_raw "
+            "WHERE timestamp >= datetime('now', '-1 day') "
+            "GROUP BY hour ORDER BY hour"
+        ).fetchall()
+        result["hourly"] = [dict(r) for r in hourly]
+    else:
+        result["rf_totals"] = None
+        result["rf_totals_24h"] = None
+        result["hourly"] = []
+
+    # ── Channel utilization (from decoded telemetry) ──────────────────────
+    util_rows = db_conn.execute(
+        "SELECT t.source_id, t.source_name, t.data, t.timestamp "
+        "FROM traffic t "
+        "INNER JOIN ( "
+        "  SELECT source_id, MAX(id) AS max_id "
+        "  FROM traffic "
+        "  WHERE msg_type = 'TELEMETRY_APP' "
+        "    AND data LIKE '%channel_utilization%' "
+        "  GROUP BY source_id "
+        ") latest ON t.id = latest.max_id"
+    ).fetchall()
+
+    channel_util = []
+    for row in util_rows:
+        try:
+            data = json.loads(row["data"]) if row["data"] else {}
+        except (json.JSONDecodeError, TypeError):
+            continue
+        cu = data.get("channel_utilization")
+        if cu is not None:
+            channel_util.append({
+                "source_id": row["source_id"],
+                "source_name": row["source_name"],
+                "channel_utilization": cu,
+                "air_util_tx": data.get("air_util_tx"),
+                "timestamp": row["timestamp"],
+            })
+    result["channel_utilization"] = channel_util
+
+    return jsonify(result)
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():

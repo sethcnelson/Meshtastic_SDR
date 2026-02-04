@@ -334,6 +334,11 @@
         });
     }
 
+    // Telemetry cache: { node_id: data | "loading" | null }
+    var telemetryCache = {};
+    // Expanded telemetry rows: Set of node_id
+    var expandedTelemetry = {};
+
     // ── Refresh ──────────────────────────────────────────────────────────────
     function refresh() {
         fetchStats();
@@ -341,6 +346,7 @@
         fetchTraffic();
         fetchPositions();
         fetchWatchList();
+        fetchMetrics();
         document.getElementById("last-update").textContent =
             "Updated " + new Date().toLocaleTimeString();
     }
@@ -462,6 +468,8 @@
             var isStarred = watchList.indexOf(n.node_id) !== -1;
             var starClass = isStarred ? "star-btn starred" : "star-btn";
             var starChar = isStarred ? "\u2605" : "\u2606";
+            var isExpanded = !!expandedTelemetry[n.node_id];
+            var toggleChar = isExpanded ? "\u25BC" : "\u25B6";
 
             var pos = positionsMap[n.node_id];
             var pinHtml = "";
@@ -478,14 +486,17 @@
                     '" title="' + esc(pinTitle) + '">\u{1F4CD}</a>';
             }
 
-            return "<tr>" +
-                '<td class="th-star"><button class="' + starClass + '" data-node="' + esc(n.node_id) + '">' + starChar + '</button></td>' +
+            var rowHtml = "<tr>" +
+                '<td class="th-star"><button class="' + starClass + '" data-node="' + esc(n.node_id) + '">' + starChar + '</button>' +
+                '<button class="telemetry-toggle" data-node="' + esc(n.node_id) + '" title="Toggle telemetry">' + toggleChar + '</button></td>' +
                 "<td>" + esc(n.node_id) + pinHtml + "</td>" +
                 "<td>" + displayNodeName(n.long_name, n.short_name, n.node_id) + "</td>" +
                 "<td>" + esc(n.hw) + "</td>" +
                 "<td>" + fmtTime(n.first_seen) + "</td>" +
                 "<td>" + fmtTime(n.last_seen) + "</td>" +
                 "</tr>";
+
+            return rowHtml;
         }).join("");
 
         // Attach star click handlers
@@ -494,6 +505,24 @@
                 e.stopPropagation();
                 toggleWatch(this.getAttribute("data-node"));
             });
+        });
+
+        // Attach telemetry toggle handlers
+        tbody.querySelectorAll(".telemetry-toggle").forEach(function (btn) {
+            btn.addEventListener("click", function (e) {
+                e.stopPropagation();
+                toggleTelemetry(this.getAttribute("data-node"));
+            });
+        });
+
+        // Re-expand any previously expanded telemetry rows
+        Object.keys(expandedTelemetry).forEach(function (nodeId) {
+            if (telemetryCache[nodeId] && telemetryCache[nodeId] !== "loading") {
+                renderTelemetryRow(nodeId);
+            } else {
+                insertTelemetryRow(nodeId, '<div class="telemetry-loading">Loading telemetry...</div>');
+                fetchNodeTelemetry(nodeId);
+            }
         });
 
         // Attach coordinate link handlers
@@ -749,6 +778,288 @@
             // Attach coordinate link handlers
             attachCoordLinks(container);
         });
+    }
+
+    // ── Metrics ──────────────────────────────────────────────────────────────
+    function fetchMetrics() {
+        fetchJSON("/api/metrics", function (data) {
+            renderRfMetrics(data);
+            renderChannelUtil(data.channel_utilization || []);
+            renderHourlyChart(data.hourly || []);
+        });
+    }
+
+    function renderRfMetrics(data) {
+        var container = document.getElementById("rf-metrics");
+        var rf = data.rf_totals;
+        var rf24 = data.rf_totals_24h;
+
+        if (!rf || rf.total === 0) {
+            container.innerHTML = '<p class="muted">No RF data yet (packets_raw table)</p>';
+            return;
+        }
+
+        var decPct = rf.total > 0 ? ((rf.decrypted / rf.total) * 100).toFixed(1) : "0";
+
+        var html = '<div class="rf-section-label">All Time</div>' +
+            rfRow("Total RF Packets", rf.total.toLocaleString(), "") +
+            rfRow("Decrypted", rf.decrypted.toLocaleString() + " (" + decPct + "%)", "") +
+            rfRow("Public Channel", rf.public.toLocaleString(), "public") +
+            rfRow("Private Channel", rf.private.toLocaleString(), "private") +
+            rfRow("Undecrypted", rf.undecrypted.toLocaleString(), "undecrypted");
+
+        if (rf24 && rf24.total > 0) {
+            var decPct24 = rf24.total > 0 ? ((rf24.decrypted / rf24.total) * 100).toFixed(1) : "0";
+            html += '<div class="rf-section-label">Last 24 Hours</div>' +
+                rfRow("RF Packets", rf24.total.toLocaleString(), "") +
+                rfRow("Decrypted", rf24.decrypted.toLocaleString() + " (" + decPct24 + "%)", "") +
+                rfRow("Public", rf24.public.toLocaleString(), "public") +
+                rfRow("Private", rf24.private.toLocaleString(), "private") +
+                rfRow("Undecrypted", rf24.undecrypted.toLocaleString(), "undecrypted");
+        }
+
+        container.innerHTML = html;
+    }
+
+    function rfRow(label, value, cls) {
+        return '<div class="rf-metric-row">' +
+            '<span class="rf-metric-label">' + esc(label) + '</span>' +
+            '<span class="rf-metric-value ' + cls + '">' + value + '</span>' +
+            '</div>';
+    }
+
+    function renderChannelUtil(entries) {
+        var container = document.getElementById("channel-util");
+        if (entries.length === 0) {
+            container.innerHTML = '<p class="muted">No utilization data</p>';
+            return;
+        }
+
+        container.innerHTML = entries.map(function (e) {
+            var pct = e.channel_utilization || 0;
+            var barClass = pct < 25 ? "low" : (pct < 50 ? "medium" : "high");
+            var name = e.source_name || e.source_id;
+            var txPct = e.air_util_tx != null ? (" TX: " + e.air_util_tx.toFixed(1) + "%") : "";
+            return '<div class="channel-util-entry" title="' + esc(name) + ' — CH: ' + pct.toFixed(1) + '%' + txPct + '">' +
+                '<span class="channel-util-name">' + esc(name) + '</span>' +
+                '<div class="channel-util-bar">' +
+                    '<div class="util-bar-track"><div class="util-bar-fill ' + barClass + '" style="width:' + Math.min(pct, 100) + '%"></div></div>' +
+                    '<span class="util-pct">' + pct.toFixed(1) + '%</span>' +
+                '</div>' +
+                '</div>';
+        }).join("");
+    }
+
+    function renderHourlyChart(hours) {
+        var container = document.getElementById("hourly-chart");
+        if (hours.length === 0) {
+            container.innerHTML = '<p class="muted">No hourly data yet</p>';
+            return;
+        }
+
+        var maxTotal = Math.max.apply(null, hours.map(function (h) { return h.total || 1; }));
+
+        var bars = hours.map(function (h) {
+            var decH = (h.decrypted || 0) / maxTotal * 100;
+            var undecH = (h.undecrypted || 0) / maxTotal * 100;
+            // Extract just the hour from the timestamp
+            var hourLabel = "";
+            try { hourLabel = h.hour.split("T")[1].replace(":00:00", ""); } catch (e) {}
+            return '<div class="hourly-bar" title="' + esc(h.hour) + ': ' + (h.total || 0) + ' packets">' +
+                '<div class="hourly-bar-segment undecrypted" style="height:' + undecH + '%"></div>' +
+                '<div class="hourly-bar-segment decrypted" style="height:' + decH + '%"></div>' +
+                '</div>';
+        }).join("");
+
+        container.innerHTML =
+            '<div class="hourly-bars">' + bars + '</div>' +
+            '<div class="hourly-legend">' +
+                '<span><span class="hourly-legend-dot decrypted"></span>Decrypted</span>' +
+                '<span><span class="hourly-legend-dot undecrypted"></span>Undecrypted</span>' +
+            '</div>';
+    }
+
+    // ── Node Telemetry ──────────────────────────────────────────────────────
+    function fetchNodeTelemetry(nodeId) {
+        if (telemetryCache[nodeId] === "loading") return;
+        telemetryCache[nodeId] = "loading";
+
+        fetchJSON("/api/node_telemetry?node=" + encodeURIComponent(nodeId), function (data) {
+            telemetryCache[nodeId] = data;
+            renderTelemetryRow(nodeId);
+        });
+    }
+
+    function toggleTelemetry(nodeId) {
+        if (expandedTelemetry[nodeId]) {
+            delete expandedTelemetry[nodeId];
+            // Remove the detail row
+            var detailRow = document.getElementById("telem-" + nodeId);
+            if (detailRow) detailRow.remove();
+            // Update toggle icon
+            var btn = document.querySelector('.telemetry-toggle[data-node="' + nodeId + '"]');
+            if (btn) btn.textContent = "\u25B6";
+        } else {
+            expandedTelemetry[nodeId] = true;
+            // Update toggle icon
+            var btn = document.querySelector('.telemetry-toggle[data-node="' + nodeId + '"]');
+            if (btn) btn.textContent = "\u25BC";
+            // Fetch and render
+            if (telemetryCache[nodeId] && telemetryCache[nodeId] !== "loading") {
+                renderTelemetryRow(nodeId);
+            } else {
+                // Insert loading row
+                insertTelemetryRow(nodeId, '<div class="telemetry-loading">Loading telemetry...</div>');
+                fetchNodeTelemetry(nodeId);
+            }
+        }
+    }
+
+    function insertTelemetryRow(nodeId, contentHtml) {
+        // Remove existing detail row if any
+        var existing = document.getElementById("telem-" + nodeId);
+        if (existing) existing.remove();
+
+        // Find the parent row
+        var btn = document.querySelector('.telemetry-toggle[data-node="' + nodeId + '"]');
+        if (!btn) return;
+        var parentRow = btn.closest("tr");
+        if (!parentRow) return;
+
+        var detailRow = document.createElement("tr");
+        detailRow.className = "telemetry-detail-row";
+        detailRow.id = "telem-" + nodeId;
+        var td = document.createElement("td");
+        td.setAttribute("colspan", "6");
+        td.innerHTML = '<div class="telemetry-detail">' + contentHtml + '</div>';
+        detailRow.appendChild(td);
+
+        parentRow.parentNode.insertBefore(detailRow, parentRow.nextSibling);
+    }
+
+    function renderTelemetryRow(nodeId) {
+        if (!expandedTelemetry[nodeId]) return;
+
+        var data = telemetryCache[nodeId];
+        if (!data || data === "loading") return;
+
+        var html = "";
+
+        if (data.device) {
+            html += renderTelemetrySection("Device Metrics", data.device.data, data.device.timestamp, {
+                battery_level: { label: "Battery", unit: "%" },
+                voltage: { label: "Voltage", unit: "V" },
+                channel_utilization: { label: "Ch Util", unit: "%" },
+                air_util_tx: { label: "Air TX", unit: "%" },
+                uptime_seconds: { label: "Uptime", fmt: fmtUptime }
+            });
+        }
+
+        if (data.environment) {
+            html += renderTelemetrySection("Environment", data.environment.data, data.environment.timestamp, {
+                temperature: { label: "Temp", unit: "\u00B0C" },
+                relative_humidity: { label: "Humidity", unit: "%" },
+                barometric_pressure: { label: "Pressure", unit: "hPa" },
+                gas_resistance: { label: "Gas Resist", unit: "\u03A9" },
+                voltage: { label: "Voltage", unit: "V" },
+                current: { label: "Current", unit: "mA" },
+                iaq: { label: "IAQ" },
+                lux: { label: "Light", unit: "lux" },
+                uv_lux: { label: "UV", unit: "lux" },
+                wind_speed: { label: "Wind", unit: "m/s" },
+                wind_direction: { label: "Wind Dir", unit: "\u00B0" },
+                wind_gust: { label: "Gust", unit: "m/s" },
+                radiation: { label: "Radiation" },
+                rainfall_1h: { label: "Rain 1h", unit: "mm" },
+                rainfall_24h: { label: "Rain 24h", unit: "mm" },
+                soil_moisture: { label: "Soil Moist", unit: "%" },
+                soil_temperature: { label: "Soil Temp", unit: "\u00B0C" }
+            });
+        }
+
+        if (data.power) {
+            html += renderTelemetrySection("Power Metrics", data.power.data, data.power.timestamp, {});
+            // Render channel table for power
+            if (data.power.data.channels && data.power.data.channels.length > 0) {
+                html += '<div class="telemetry-grid">';
+                data.power.data.channels.forEach(function (ch) {
+                    html += '<div class="telemetry-item"><span class="telemetry-item-label">Ch' + ch.ch + '</span>' +
+                        '<span class="telemetry-item-value">' + ch.voltage + 'V / ' + ch.current + 'A</span></div>';
+                });
+                html += '</div>';
+            }
+        }
+
+        if (data.air_quality) {
+            html += renderTelemetrySection("Air Quality", data.air_quality.data, data.air_quality.timestamp, {
+                pm10_standard: { label: "PM1.0" },
+                pm25_standard: { label: "PM2.5" },
+                pm100_standard: { label: "PM10" },
+                co2: { label: "CO2", unit: "ppm" }
+            });
+        }
+
+        if (data.local_stats) {
+            html += renderTelemetrySection("Local Stats", data.local_stats.data, data.local_stats.timestamp, {
+                uptime_seconds: { label: "Uptime", fmt: fmtUptime },
+                channel_utilization: { label: "Ch Util", unit: "%" },
+                air_util_tx: { label: "Air TX", unit: "%" },
+                num_packets_tx: { label: "Pkts TX" },
+                num_packets_rx: { label: "Pkts RX" },
+                num_packets_rx_bad: { label: "RX Bad" },
+                num_online_nodes: { label: "Online Nodes" },
+                num_total_nodes: { label: "Total Nodes" },
+                num_rx_dupe: { label: "RX Dupes" },
+                num_tx_relay: { label: "TX Relayed" },
+                num_tx_relay_canceled: { label: "Relay Canceled" },
+                num_tx_dropped: { label: "TX Dropped" },
+                noise_floor: { label: "Noise Floor", unit: "dBm" }
+            });
+        }
+
+        if (!html) {
+            html = '<div class="telemetry-no-data">No telemetry data available for this node</div>';
+        }
+
+        insertTelemetryRow(nodeId, html);
+    }
+
+    function renderTelemetrySection(title, data, timestamp, fieldDefs) {
+        if (!data) return "";
+        var items = "";
+        var keys = Object.keys(fieldDefs);
+
+        if (keys.length > 0) {
+            keys.forEach(function (key) {
+                var val = data[key];
+                if (val == null) return;
+                var def = fieldDefs[key];
+                var display;
+                if (def.fmt) {
+                    display = def.fmt(val);
+                } else {
+                    display = val + (def.unit ? " " + def.unit : "");
+                }
+                items += '<div class="telemetry-item">' +
+                    '<span class="telemetry-item-label">' + esc(def.label) + '</span>' +
+                    '<span class="telemetry-item-value">' + esc(String(display)) + '</span></div>';
+            });
+        }
+
+        if (!items && keys.length > 0) return "";
+
+        var timeStr = timestamp ? ' <small class="muted">(' + fmtTime(timestamp) + ')</small>' : "";
+        return '<div class="telemetry-section">' +
+            '<div class="telemetry-section-title">' + esc(title) + timeStr + '</div>' +
+            '<div class="telemetry-grid">' + items + '</div>' +
+            '</div>';
+    }
+
+    function fmtUptime(seconds) {
+        if (seconds < 60) return seconds + "s";
+        if (seconds < 3600) return Math.floor(seconds / 60) + "m";
+        if (seconds < 86400) return Math.floor(seconds / 3600) + "h " + Math.floor((seconds % 3600) / 60) + "m";
+        return Math.floor(seconds / 86400) + "d " + Math.floor((seconds % 86400) / 3600) + "h";
     }
 
     // ── Positions / Map ──────────────────────────────────────────────────────

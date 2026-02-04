@@ -6,7 +6,7 @@ import time
 
 from packet import Packet
 from util import compute_channel_hash
-from db import init_db, upsert_node, log_traffic, resolve_name, close_db
+from db import init_db, upsert_node, log_traffic, log_raw_packet, resolve_name, close_db
 
 # The default Meshtastic public key bytes (AQ== expanded)
 DEFAULT_KEY_BYTES = base64.b64decode("1PG7OiApB1nwvP+rz05pAQ==")
@@ -75,16 +75,39 @@ def handle_packet(pkt = None):
         print(f"[DEBUG] Data: {packet.get_data()}")
     
     decrypted = False
+    matched_key = None
 
-    #print(f"[INFO] Attempting to decrypt...")
     for key in keys:
         try:
             decrypted = packet.decrypt(key)
-            print("[INFO] key: ", key)
+            matched_key = key
             break
         except Exception as e:
             continue
-    
+
+    # Determine encryption type for the matched key
+    encryption_type = None
+    if decrypted and matched_key:
+        try:
+            is_public = base64.b64decode(matched_key) == DEFAULT_KEY_BYTES
+        except Exception:
+            is_public = False
+        encryption_type = "public" if is_public else "private"
+
+    # Log every packet to packets_raw (decrypted or not)
+    raw_size = len(pkt) if pkt else 0
+    log_raw_packet(
+        timestamp=packet.get_timestamp(),
+        source_id=packet.get_source(),
+        dest_id=packet.get_dest(),
+        packet_id=packet.get_packet_id(),
+        channel_hash=packet.get_channel_hash(),
+        flags=packet.get_flags(),
+        packet_size=raw_size,
+        decrypted=decrypted,
+        key_used=encryption_type,
+    )
+
     if decrypted:
         pkt_hash = packet.get_channel_hash()
         channel_name = channel_map.get(pkt_hash)
@@ -114,12 +137,6 @@ def handle_packet(pkt = None):
         print(f"[INFO] from: {src_name}")
         print(f"[INFO] to:   {dst_name}")
 
-        # Log traffic to database — record channel type, not the actual key
-        try:
-            is_public = base64.b64decode(key) == DEFAULT_KEY_BYTES
-        except Exception:
-            is_public = False
-        encryption_type = "public" if is_public else "private"
         log_traffic(
             timestamp=packet.get_timestamp(),
             source_id=packet.get_source(),

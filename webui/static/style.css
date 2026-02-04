@@ -645,6 +645,254 @@ tr:hover td {
     color: var(--red);
 }
 
+/* ── RF Metrics ─────────────────────────────────────────────────────────── */
+
+.rf-metrics {
+    font-size: 12px;
+}
+
+.rf-metric-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.rf-metric-row:last-child {
+    border-bottom: none;
+}
+
+.rf-metric-label {
+    color: var(--text-muted);
+}
+
+.rf-metric-value {
+    font-weight: 600;
+}
+
+.rf-metric-value.public {
+    color: var(--orange);
+}
+
+.rf-metric-value.private {
+    color: var(--green);
+}
+
+.rf-metric-value.undecrypted {
+    color: var(--red);
+}
+
+.rf-section-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-top: 8px;
+    margin-bottom: 4px;
+}
+
+/* ── Channel Utilization ────────────────────────────────────────────────── */
+
+.channel-util-list {
+    font-size: 12px;
+}
+
+.channel-util-entry {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.channel-util-entry:last-child {
+    border-bottom: none;
+}
+
+.channel-util-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 140px;
+}
+
+.channel-util-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.util-bar-track {
+    width: 60px;
+    height: 6px;
+    background: var(--bg);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.util-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s;
+}
+
+.util-bar-fill.low { background: var(--green); }
+.util-bar-fill.medium { background: var(--orange); }
+.util-bar-fill.high { background: var(--red); }
+
+.util-pct {
+    font-size: 11px;
+    font-weight: 600;
+    min-width: 36px;
+    text-align: right;
+}
+
+/* ── Hourly Traffic Chart ───────────────────────────────────────────────── */
+
+.hourly-chart {
+    min-height: 80px;
+}
+
+.hourly-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 1px;
+    height: 80px;
+    padding-top: 4px;
+}
+
+.hourly-bar {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-width: 0;
+    height: 100%;
+}
+
+.hourly-bar-segment {
+    min-height: 0;
+    width: 100%;
+}
+
+.hourly-bar-segment.decrypted {
+    background: var(--green);
+    border-radius: 1px 1px 0 0;
+}
+
+.hourly-bar-segment.undecrypted {
+    background: var(--red);
+    opacity: 0.7;
+}
+
+.hourly-bar-label {
+    font-size: 8px;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 2px;
+    overflow: hidden;
+}
+
+.hourly-legend {
+    display: flex;
+    gap: 12px;
+    margin-top: 6px;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.hourly-legend-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    margin-right: 3px;
+    vertical-align: middle;
+}
+
+.hourly-legend-dot.decrypted { background: var(--green); }
+.hourly-legend-dot.undecrypted { background: var(--red); opacity: 0.7; }
+
+/* ── Telemetry Expandable Row ───────────────────────────────────────────── */
+
+.telemetry-toggle {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 11px;
+    padding: 0 4px;
+    line-height: 1;
+    transition: color 0.15s;
+    font-family: var(--font-mono);
+}
+
+.telemetry-toggle:hover {
+    color: var(--accent);
+}
+
+tr.telemetry-detail-row td {
+    padding: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-card);
+}
+
+.telemetry-detail {
+    padding: 10px 12px;
+    font-size: 11px;
+}
+
+.telemetry-section {
+    margin-bottom: 8px;
+}
+
+.telemetry-section:last-child {
+    margin-bottom: 0;
+}
+
+.telemetry-section-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.telemetry-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 4px 12px;
+}
+
+.telemetry-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+}
+
+.telemetry-item-label {
+    color: var(--text-muted);
+}
+
+.telemetry-item-value {
+    font-weight: 600;
+}
+
+.telemetry-no-data {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 11px;
+    padding: 8px 0;
+}
+
+.telemetry-loading {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 11px;
+    padding: 8px 0;
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 
 @media (max-width: 1024px) {

@@ -42,6 +42,19 @@ def init_db(debug=False):
             data         TEXT,
             key_used     TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS packets_raw (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp    TEXT NOT NULL,
+            source_id    TEXT,
+            dest_id      TEXT,
+            packet_id    TEXT,
+            channel_hash TEXT,
+            flags        TEXT,
+            packet_size  INTEGER,
+            decrypted    INTEGER NOT NULL DEFAULT 0,
+            key_used     TEXT
+        );
     """)
     _conn.commit()
 
@@ -140,6 +153,21 @@ def log_traffic(timestamp, source_id, dest_id, packet_id=None, channel_hash=None
           packet_id, channel_hash, channel_name, port_num,
           msg_type, data_str, key_used))
     _conn.commit()
+
+def log_raw_packet(timestamp, source_id, dest_id, packet_id=None,
+                   channel_hash=None, flags=None, packet_size=None,
+                   decrypted=False, key_used=None):
+    if _conn is None:
+        return
+    _conn.execute("""
+        INSERT INTO packets_raw (timestamp, source_id, dest_id, packet_id,
+                                 channel_hash, flags, packet_size, decrypted, key_used)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (str(timestamp), source_id, dest_id, packet_id,
+          channel_hash, flags, packet_size,
+          1 if decrypted else 0, key_used))
+    _conn.commit()
+
 
 def close_db():
     global _conn

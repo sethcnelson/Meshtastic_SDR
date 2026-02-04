@@ -22,7 +22,7 @@ This is a GnuRadio SDR project to fully build a RX and TX stack for Meshtastic.
 ## Test setup
 
 1. Create docker container with debian:latest image, mount a volume to access the setup script, and map a port for the webui (5000)
-2. Initialize the container, execute the setup.sh script to install all dependancies and build gr-lora_sdr from source, clone this repo, etc.
+2. Initialize the container, execute the `deb-install.sh` script to install all dependancies and build gr-lora_sdr from source, clone this repo, etc.
 3. Compile the GNU Radio script for headless use
 ```bash
 cd Meshtastic_SDR/gnuradio
@@ -30,7 +30,7 @@ grcc Meshtastic_US_250KHz_RTLSDR_headless.grc
 ```
 4. Launch tmux and in one session start the GNU Radio process
 ```bash
-python3 Meshtastic_250KHz_all_headless.py
+python3 Meshtastic_US_250KHz_RTLSDR_headless.py
 ```
 5. In another session start decoder
 ```bash
