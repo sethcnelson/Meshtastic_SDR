@@ -22,6 +22,19 @@ def get_db(db_path):
     return conn
 
 
+# ── Transport Filter Helper ────────────────────────────────────────────────────
+
+def _transport_clauses(table_alias="", param_name="transport"):
+    """Return (where_fragment, params) for ?transport=rf|mqtt filtering."""
+    transport = request.args.get(param_name, "").strip().lower()
+    prefix = (table_alias + ".") if table_alias else ""
+    if transport == "rf":
+        return f"{prefix}via_mqtt = 0", [], transport
+    if transport == "mqtt":
+        return f"{prefix}via_mqtt = 1", [], transport
+    return "", [], transport
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.route("/")
@@ -37,28 +50,45 @@ def api_nodes():
         "FROM nodes ORDER BY last_seen DESC"
     ).fetchall()
 
+    transport_clause, _, transport = _transport_clauses()
+
+    # Build optional WHERE for transport-filtered queries
+    tw = f"WHERE {transport_clause}" if transport_clause else ""
+    tw_and = f"AND {transport_clause}" if transport_clause else ""
+
     # Enrich with last activity and last nodeinfo timestamps
-    # Last non-NODEINFO traffic per node (any activity)
     activity_rows = db_conn.execute(
-        "SELECT source_id, MAX(timestamp) AS last_activity "
-        "FROM traffic "
-        "GROUP BY source_id"
+        f"SELECT source_id, MAX(timestamp) AS last_activity "
+        f"FROM traffic {tw} "
+        f"GROUP BY source_id"
     ).fetchall()
     activity_map = {r["source_id"]: r["last_activity"] for r in activity_rows}
 
     # Last NODEINFO_APP per node
     nodeinfo_rows = db_conn.execute(
-        "SELECT source_id, MAX(timestamp) AS last_nodeinfo "
-        "FROM traffic WHERE msg_type = 'NODEINFO_APP' "
-        "GROUP BY source_id"
+        f"SELECT source_id, MAX(timestamp) AS last_nodeinfo "
+        f"FROM traffic WHERE msg_type = 'NODEINFO_APP' {tw_and} "
+        f"GROUP BY source_id"
     ).fetchall()
     nodeinfo_map = {r["source_id"]: r["last_nodeinfo"] for r in nodeinfo_rows}
 
     # Count online nodes (active in last 2h) for scaled interval calculation
     online_count = db_conn.execute(
-        "SELECT COUNT(DISTINCT source_id) FROM traffic "
-        "WHERE timestamp >= datetime('now', '-2 hours')"
+        f"SELECT COUNT(DISTINCT source_id) FROM traffic "
+        f"WHERE timestamp >= datetime('now', '-2 hours') {tw_and}"
     ).fetchone()[0]
+
+    # Per-node transport aggregates
+    transport_rows = db_conn.execute(
+        "SELECT source_id, "
+        "  SUM(CASE WHEN via_mqtt = 1 THEN 1 ELSE 0 END) AS mqtt_count, "
+        "  SUM(CASE WHEN via_mqtt = 0 AND hop_start > 0 AND hop_start = hop_limit THEN 1 ELSE 0 END) AS direct_rf_count, "
+        "  SUM(CASE WHEN via_mqtt = 0 THEN 1 ELSE 0 END) AS rf_count, "
+        "  MAX(CASE WHEN via_mqtt = 0 THEN timestamp END) AS last_rf, "
+        "  MAX(CASE WHEN via_mqtt = 1 THEN timestamp END) AS last_mqtt "
+        "FROM traffic GROUP BY source_id"
+    ).fetchall()
+    transport_map = {r["source_id"]: dict(r) for r in transport_rows}
 
     result = []
     for r in rows:
@@ -66,6 +96,21 @@ def api_nodes():
         node["last_activity"] = activity_map.get(r["node_id"])
         node["last_nodeinfo"] = nodeinfo_map.get(r["node_id"])
         node["online_nodes"] = online_count
+
+        # Merge transport data
+        td = transport_map.get(r["node_id"], {})
+        node["mqtt_count"] = td.get("mqtt_count", 0) or 0
+        node["direct_rf_count"] = td.get("direct_rf_count", 0) or 0
+        node["rf_count"] = td.get("rf_count", 0) or 0
+        node["last_rf"] = td.get("last_rf")
+        node["last_mqtt"] = td.get("last_mqtt")
+
+        # Filter nodes by transport if requested
+        if transport == "rf" and node["rf_count"] == 0:
+            continue
+        if transport == "mqtt" and node["mqtt_count"] == 0:
+            continue
+
         result.append(node)
 
     return jsonify(result)
@@ -96,13 +141,18 @@ def api_traffic():
         )
         params.extend([like, like, like, like])
 
+    transport_clause, _, _ = _transport_clauses()
+    if transport_clause:
+        clauses.append(transport_clause)
+
     where = ""
     if clauses:
         where = "WHERE " + " AND ".join(clauses)
 
     query = (
         f"SELECT id, timestamp, source_id, source_name, dest_id, dest_name, "
-        f"       packet_id, channel_hash, channel_name, port_num, msg_type, data, key_used "
+        f"       packet_id, channel_hash, channel_name, port_num, msg_type, data, key_used, "
+        f"       via_mqtt, hop_start, hop_limit "
         f"FROM traffic {where} ORDER BY id DESC LIMIT ?"
     )
     params.append(limit)
@@ -225,17 +275,23 @@ def api_watchlist():
 
 @app.route("/api/stats")
 def api_stats():
+    transport_clause, _, _ = _transport_clauses()
+    tw = f"WHERE {transport_clause}" if transport_clause else ""
+    tw_and = f"AND {transport_clause}" if transport_clause else ""
+
     total_nodes = db_conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0]
-    total_packets = db_conn.execute("SELECT COUNT(*) FROM traffic").fetchone()[0]
+    total_packets = db_conn.execute(
+        f"SELECT COUNT(*) FROM traffic {tw}"
+    ).fetchone()[0]
 
     packets_24h = db_conn.execute(
-        "SELECT COUNT(*) FROM traffic "
-        "WHERE timestamp >= datetime('now', '-1 day')"
+        f"SELECT COUNT(*) FROM traffic "
+        f"WHERE timestamp >= datetime('now', '-1 day') {tw_and}"
     ).fetchone()[0]
 
     type_rows = db_conn.execute(
-        "SELECT msg_type, COUNT(*) AS cnt FROM traffic "
-        "GROUP BY msg_type ORDER BY cnt DESC"
+        f"SELECT msg_type, COUNT(*) AS cnt FROM traffic "
+        f"{tw} GROUP BY msg_type ORDER BY cnt DESC"
     ).fetchall()
     by_type = {r["msg_type"]: r["cnt"] for r in type_rows}
 
@@ -293,19 +349,23 @@ def _safe_table_exists(table_name):
 @app.route("/api/metrics")
 def api_metrics():
     result = {}
+    transport_clause, _, _ = _transport_clauses()
 
     # ── Decryption tallies (from packets_raw if available) ────────────────
     has_raw = _safe_table_exists("packets_raw")
 
     if has_raw:
+        raw_tw = f"WHERE {transport_clause}" if transport_clause else ""
+        raw_tw_and = f"AND {transport_clause}" if transport_clause else ""
+
         totals = db_conn.execute(
-            "SELECT "
-            "  COUNT(*) AS total, "
-            "  SUM(CASE WHEN decrypted = 1 THEN 1 ELSE 0 END) AS decrypted, "
-            "  SUM(CASE WHEN decrypted = 0 THEN 1 ELSE 0 END) AS undecrypted, "
-            "  SUM(CASE WHEN key_used = 'public' THEN 1 ELSE 0 END) AS public_ct, "
-            "  SUM(CASE WHEN key_used = 'private' THEN 1 ELSE 0 END) AS private_ct "
-            "FROM packets_raw"
+            f"SELECT "
+            f"  COUNT(*) AS total, "
+            f"  SUM(CASE WHEN decrypted = 1 THEN 1 ELSE 0 END) AS decrypted, "
+            f"  SUM(CASE WHEN decrypted = 0 THEN 1 ELSE 0 END) AS undecrypted, "
+            f"  SUM(CASE WHEN key_used = 'public' THEN 1 ELSE 0 END) AS public_ct, "
+            f"  SUM(CASE WHEN key_used = 'private' THEN 1 ELSE 0 END) AS private_ct "
+            f"FROM packets_raw {raw_tw}"
         ).fetchone()
         result["rf_totals"] = {
             "total": totals["total"],
@@ -317,13 +377,13 @@ def api_metrics():
 
         # 24h breakdown
         totals_24h = db_conn.execute(
-            "SELECT "
-            "  COUNT(*) AS total, "
-            "  SUM(CASE WHEN decrypted = 1 THEN 1 ELSE 0 END) AS decrypted, "
-            "  SUM(CASE WHEN decrypted = 0 THEN 1 ELSE 0 END) AS undecrypted, "
-            "  SUM(CASE WHEN key_used = 'public' THEN 1 ELSE 0 END) AS public_ct, "
-            "  SUM(CASE WHEN key_used = 'private' THEN 1 ELSE 0 END) AS private_ct "
-            "FROM packets_raw WHERE timestamp >= datetime('now', '-1 day')"
+            f"SELECT "
+            f"  COUNT(*) AS total, "
+            f"  SUM(CASE WHEN decrypted = 1 THEN 1 ELSE 0 END) AS decrypted, "
+            f"  SUM(CASE WHEN decrypted = 0 THEN 1 ELSE 0 END) AS undecrypted, "
+            f"  SUM(CASE WHEN key_used = 'public' THEN 1 ELSE 0 END) AS public_ct, "
+            f"  SUM(CASE WHEN key_used = 'private' THEN 1 ELSE 0 END) AS private_ct "
+            f"FROM packets_raw WHERE timestamp >= datetime('now', '-1 day') {raw_tw_and}"
         ).fetchone()
         result["rf_totals_24h"] = {
             "total": totals_24h["total"],
@@ -335,13 +395,13 @@ def api_metrics():
 
         # Hourly packet counts (last 24h) for graphing
         hourly = db_conn.execute(
-            "SELECT strftime('%Y-%m-%dT%H:00:00', timestamp) AS hour, "
-            "  COUNT(*) AS total, "
-            "  SUM(CASE WHEN decrypted = 1 THEN 1 ELSE 0 END) AS decrypted, "
-            "  SUM(CASE WHEN decrypted = 0 THEN 1 ELSE 0 END) AS undecrypted "
-            "FROM packets_raw "
-            "WHERE timestamp >= datetime('now', '-1 day') "
-            "GROUP BY hour ORDER BY hour"
+            f"SELECT strftime('%Y-%m-%dT%H:00:00', timestamp) AS hour, "
+            f"  COUNT(*) AS total, "
+            f"  SUM(CASE WHEN decrypted = 1 THEN 1 ELSE 0 END) AS decrypted, "
+            f"  SUM(CASE WHEN decrypted = 0 THEN 1 ELSE 0 END) AS undecrypted "
+            f"FROM packets_raw "
+            f"WHERE timestamp >= datetime('now', '-1 day') {raw_tw_and} "
+            f"GROUP BY hour ORDER BY hour"
         ).fetchall()
         result["hourly"] = [dict(r) for r in hourly]
     else:
@@ -350,16 +410,18 @@ def api_metrics():
         result["hourly"] = []
 
     # ── Channel utilization (from decoded telemetry) ──────────────────────
+    traffic_tw_and = f"AND {transport_clause}" if transport_clause else ""
+
     util_rows = db_conn.execute(
-        "SELECT t.source_id, t.source_name, t.data, t.timestamp "
-        "FROM traffic t "
-        "INNER JOIN ( "
-        "  SELECT source_id, MAX(id) AS max_id "
-        "  FROM traffic "
-        "  WHERE msg_type = 'TELEMETRY_APP' "
-        "    AND data LIKE '%channel_utilization%' "
-        "  GROUP BY source_id "
-        ") latest ON t.id = latest.max_id"
+        f"SELECT t.source_id, t.source_name, t.data, t.timestamp "
+        f"FROM traffic t "
+        f"INNER JOIN ( "
+        f"  SELECT source_id, MAX(id) AS max_id "
+        f"  FROM traffic "
+        f"  WHERE msg_type = 'TELEMETRY_APP' "
+        f"    AND data LIKE '%channel_utilization%' "
+        f"  GROUP BY source_id "
+        f") latest ON t.id = latest.max_id"
     ).fetchall()
 
     channel_util = []
@@ -382,17 +444,17 @@ def api_metrics():
     # ── Hop count distribution (from packets_raw) ──────────────────────────
     if has_raw:
         hop_rows = db_conn.execute(
-            "SELECT hop_limit, COUNT(*) AS cnt FROM packets_raw "
-            "WHERE hop_limit IS NOT NULL "
-            "GROUP BY hop_limit ORDER BY hop_limit"
+            f"SELECT hop_limit, COUNT(*) AS cnt FROM packets_raw "
+            f"WHERE hop_limit IS NOT NULL {raw_tw_and} "
+            f"GROUP BY hop_limit ORDER BY hop_limit"
         ).fetchall()
         result["hop_distribution"] = [dict(r) for r in hop_rows]
 
         # Average packet size
         size_row = db_conn.execute(
-            "SELECT AVG(packet_size) AS avg_size, MIN(packet_size) AS min_size, "
-            "       MAX(packet_size) AS max_size "
-            "FROM packets_raw WHERE packet_size > 0"
+            f"SELECT AVG(packet_size) AS avg_size, MIN(packet_size) AS min_size, "
+            f"       MAX(packet_size) AS max_size "
+            f"FROM packets_raw WHERE packet_size > 0 {raw_tw_and}"
         ).fetchone()
         result["packet_sizes"] = {
             "avg": round(size_row["avg_size"], 1) if size_row["avg_size"] else 0,
@@ -403,17 +465,19 @@ def api_metrics():
         # Duplicate packet detection (same packet_id seen multiple times)
         # These are mesh rebroadcasts — the same original packet relayed by different nodes
         dup_row = db_conn.execute(
-            "SELECT COUNT(*) AS dup_ids, SUM(cnt) AS dup_total FROM ("
-            "  SELECT packet_id, COUNT(*) AS cnt FROM packets_raw "
-            "  WHERE packet_id IS NOT NULL "
-            "  GROUP BY packet_id HAVING COUNT(*) > 1"
-            ")"
+            f"SELECT COUNT(*) AS dup_ids, SUM(cnt) AS dup_total FROM ("
+            f"  SELECT packet_id, COUNT(*) AS cnt FROM packets_raw "
+            f"  WHERE packet_id IS NOT NULL {raw_tw_and} "
+            f"  GROUP BY packet_id HAVING COUNT(*) > 1"
+            f")"
         ).fetchone()
         unique_ids = db_conn.execute(
-            "SELECT COUNT(DISTINCT packet_id) FROM packets_raw "
-            "WHERE packet_id IS NOT NULL"
+            f"SELECT COUNT(DISTINCT packet_id) FROM packets_raw "
+            f"WHERE packet_id IS NOT NULL {raw_tw_and}"
         ).fetchone()[0]
-        total_raw = db_conn.execute("SELECT COUNT(*) FROM packets_raw").fetchone()[0]
+        total_raw = db_conn.execute(
+            f"SELECT COUNT(*) FROM packets_raw {raw_tw}"
+        ).fetchone()[0]
         result["duplicates"] = {
             "rebroadcast_packet_ids": dup_row["dup_ids"] or 0,
             "rebroadcast_total_copies": dup_row["dup_total"] or 0,
@@ -423,8 +487,8 @@ def api_metrics():
 
         # Via MQTT count
         mqtt_row = db_conn.execute(
-            "SELECT SUM(CASE WHEN via_mqtt = 1 THEN 1 ELSE 0 END) AS mqtt_ct "
-            "FROM packets_raw"
+            f"SELECT SUM(CASE WHEN via_mqtt = 1 THEN 1 ELSE 0 END) AS mqtt_ct "
+            f"FROM packets_raw {raw_tw}"
         ).fetchone()
         result["via_mqtt"] = mqtt_row["mqtt_ct"] or 0
     else:
@@ -439,24 +503,27 @@ def api_metrics():
 @app.route("/api/metrics/activity")
 def api_metrics_activity():
     """Per-node activity patterns over the last 24 hours."""
+    transport_clause, _, _ = _transport_clauses()
+    tw_and = f"AND {transport_clause}" if transport_clause else ""
+
     # Top 20 most active nodes in last 24h
     rows = db_conn.execute(
-        "SELECT source_id, source_name, COUNT(*) AS pkt_count, "
-        "       COUNT(DISTINCT msg_type) AS type_count "
-        "FROM traffic "
-        "WHERE timestamp >= datetime('now', '-1 day') "
-        "GROUP BY source_id "
-        "ORDER BY pkt_count DESC LIMIT 20"
+        f"SELECT source_id, source_name, COUNT(*) AS pkt_count, "
+        f"       COUNT(DISTINCT msg_type) AS type_count "
+        f"FROM traffic "
+        f"WHERE timestamp >= datetime('now', '-1 day') {tw_and} "
+        f"GROUP BY source_id "
+        f"ORDER BY pkt_count DESC LIMIT 20"
     ).fetchall()
 
     nodes = []
     for r in rows:
         # Per-hour breakdown for this node
         hourly = db_conn.execute(
-            "SELECT strftime('%H', timestamp) AS hour, COUNT(*) AS cnt "
-            "FROM traffic "
-            "WHERE source_id = ? AND timestamp >= datetime('now', '-1 day') "
-            "GROUP BY hour ORDER BY hour",
+            f"SELECT strftime('%H', timestamp) AS hour, COUNT(*) AS cnt "
+            f"FROM traffic "
+            f"WHERE source_id = ? AND timestamp >= datetime('now', '-1 day') {tw_and} "
+            f"GROUP BY hour ORDER BY hour",
             (r["source_id"],),
         ).fetchall()
         hourly_map = {h["hour"]: h["cnt"] for h in hourly}
@@ -471,12 +538,12 @@ def api_metrics_activity():
 
     # Position update frequency — average interval between POSITION_APP per node
     pos_freq = db_conn.execute(
-        "SELECT source_id, source_name, COUNT(*) AS pos_count, "
-        "       MIN(timestamp) AS first_pos, MAX(timestamp) AS last_pos "
-        "FROM traffic "
-        "WHERE msg_type = 'POSITION_APP' AND timestamp >= datetime('now', '-1 day') "
-        "GROUP BY source_id HAVING pos_count >= 2 "
-        "ORDER BY pos_count DESC LIMIT 20"
+        f"SELECT source_id, source_name, COUNT(*) AS pos_count, "
+        f"       MIN(timestamp) AS first_pos, MAX(timestamp) AS last_pos "
+        f"FROM traffic "
+        f"WHERE msg_type = 'POSITION_APP' AND timestamp >= datetime('now', '-1 day') {tw_and} "
+        f"GROUP BY source_id HAVING pos_count >= 2 "
+        f"ORDER BY pos_count DESC LIMIT 20"
     ).fetchall()
 
     pos_frequency = []

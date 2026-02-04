@@ -94,9 +94,11 @@ def handle_packet(pkt = None):
             is_public = False
         encryption_type = "public" if is_public else "private"
 
-    # Parse flags byte: bits 0-2 = hop_limit, bit 3 = want_ack, bit 4 = via_mqtt
+    # Parse flags byte: bits 0-2 = hop_limit, bit 3 = want_ack, bit 4 = via_mqtt,
+    # bits 5-7 = hop_start (firmware 2.1+)
     flags_raw = packet.get_flags()
     hop_limit = None
+    hop_start = None
     want_ack = False
     via_mqtt = False
     if flags_raw:
@@ -105,6 +107,7 @@ def handle_packet(pkt = None):
             hop_limit = flags_int & 0x07
             want_ack = bool(flags_int & 0x08)
             via_mqtt = bool(flags_int & 0x10)
+            hop_start = (flags_int >> 5) & 0x07
         except (ValueError, TypeError):
             pass
 
@@ -118,6 +121,7 @@ def handle_packet(pkt = None):
         channel_hash=packet.get_channel_hash(),
         flags=flags_raw,
         hop_limit=hop_limit,
+        hop_start=hop_start,
         want_ack=want_ack,
         via_mqtt=via_mqtt,
         packet_size=raw_size,
@@ -165,6 +169,9 @@ def handle_packet(pkt = None):
             msg_type=message.type,
             data=getattr(message, 'data', None),
             key_used=encryption_type,
+            via_mqtt=via_mqtt,
+            hop_start=hop_start,
+            hop_limit=hop_limit,
         )
 
         message_json = message.to_json()

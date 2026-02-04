@@ -197,6 +197,9 @@
     // Watch list (array of node_id strings)
     var watchList = [];
 
+    // Transport filter state
+    var transportFilter = "";
+
     // ── Init ─────────────────────────────────────────────────────────────────
     function init() {
         // Load watch list from localStorage
@@ -250,6 +253,18 @@
                 nodeFilterText = val.trim().toLowerCase();
                 renderNodes();
             }, 200);
+        });
+
+        // Transport filter
+        try {
+            transportFilter = localStorage.getItem("meshTransportFilter") || "";
+        } catch (e) { transportFilter = ""; }
+        var transportSelect = document.getElementById("transport-filter");
+        transportSelect.value = transportFilter;
+        transportSelect.addEventListener("change", function () {
+            transportFilter = this.value;
+            localStorage.setItem("meshTransportFilter", transportFilter);
+            refresh();
         });
 
         // Sidebar toggle
@@ -363,7 +378,9 @@
 
     // ── Stats ────────────────────────────────────────────────────────────────
     function fetchStats() {
-        fetchJSON("/api/stats", function (data) {
+        var url = "/api/stats";
+        if (transportFilter) url += "?transport=" + encodeURIComponent(transportFilter);
+        fetchJSON(url, function (data) {
             document.getElementById("stat-nodes").textContent = data.total_nodes;
             document.getElementById("stat-packets").textContent = data.total_packets.toLocaleString();
             document.getElementById("stat-24h").textContent = data.packets_24h.toLocaleString();
@@ -429,7 +446,8 @@
     //                   — only if node HAS sent nodeinfo before (otherwise just active)
     // dormant (purple): activity 2-4h, nodeinfo >3h or never sent
     // offline (grey):   not heard from in >4h, or never heard from at all
-    function nodeStatus(lastActivity, lastNodeinfo) {
+    // mqtt (red):       only seen via MQTT, never heard over RF
+    function nodeStatus(lastActivity, lastNodeinfo, node) {
         var now = Date.now();
         var actAge = lastActivity ? (now - new Date(lastActivity).getTime()) : Infinity;
         var niAge = lastNodeinfo ? (now - new Date(lastNodeinfo).getTime()) : Infinity;
@@ -438,41 +456,60 @@
         var H3 = 3 * 3600000;
         var H4 = 4 * 3600000;
 
+        var result;
+
         // Active: heard from within 2h
         if (actAge <= H2) {
             // Hiding: active but nodeinfo stale — only when they HAVE sent nodeinfo before
             if (hasNodeinfo && niAge > H3) {
-                return { status: "hiding", label: "Hiding", color: "var(--orange)",
+                result = { status: "hiding", label: "Hiding", color: "var(--orange)",
                     tooltip: "Active (traffic " + fmtDuration(Math.round(actAge / 1000)) + " ago) but NODEINFO last sent " + fmtDuration(Math.round(niAge / 1000)) + " ago" };
+            } else {
+                result = { status: "active", label: "Active", color: "var(--green)",
+                    tooltip: "Heard from " + fmtDuration(Math.round(actAge / 1000)) + " ago" };
             }
-            return { status: "active", label: "Active", color: "var(--green)",
-                tooltip: "Heard from " + fmtDuration(Math.round(actAge / 1000)) + " ago" };
         }
-
         // Quiet: nodeinfo within 3h but activity >2h
-        if (hasNodeinfo && niAge <= H3) {
-            return { status: "quiet", label: "Quiet", color: "var(--accent)",
+        else if (hasNodeinfo && niAge <= H3) {
+            result = { status: "quiet", label: "Quiet", color: "var(--accent)",
                 tooltip: "NODEINFO " + fmtDuration(Math.round(niAge / 1000)) + " ago, last traffic " + fmtDuration(Math.round(actAge / 1000)) + " ago" };
         }
-
         // Dormant: activity 2-4h, nodeinfo >3h or never
-        if (actAge <= H4) {
-            return { status: "dormant", label: "Dormant", color: "var(--purple)",
+        else if (actAge <= H4) {
+            result = { status: "dormant", label: "Dormant", color: "var(--purple)",
                 tooltip: "Last traffic " + fmtDuration(Math.round(actAge / 1000)) + " ago" + (hasNodeinfo ? ", NODEINFO " + fmtDuration(Math.round(niAge / 1000)) + " ago" : ", no NODEINFO ever sent") };
         }
-
         // Offline: >4h or never heard from
-        if (actAge === Infinity) {
-            return { status: "offline", label: "Offline", color: "var(--text-muted)",
+        else if (actAge === Infinity) {
+            result = { status: "offline", label: "Offline", color: "var(--text-muted)",
                 tooltip: "Never heard from directly (only seen as a destination)" };
+        } else {
+            result = { status: "offline", label: "Offline", color: "var(--text-muted)",
+                tooltip: "Last heard " + fmtDuration(Math.round(actAge / 1000)) + " ago" };
         }
-        return { status: "offline", label: "Offline", color: "var(--text-muted)",
-            tooltip: "Last heard " + fmtDuration(Math.round(actAge / 1000)) + " ago" };
+
+        // Append transport timestamps to tooltip and override for MQTT-only nodes
+        if (node) {
+            var parts = [];
+            if (node.last_rf) parts.push("Last RF: " + fmtTime(node.last_rf));
+            if (node.last_mqtt) parts.push("Last MQTT: " + fmtTime(node.last_mqtt));
+            if (parts.length > 0) result.tooltip += " | " + parts.join(" | ");
+
+            if (nodeTransportClass(node) === "mqtt_only") {
+                result.status = "mqtt";
+                result.label = "MQTT";
+                result.color = "var(--red)";
+            }
+        }
+
+        return result;
     }
 
     // ── Nodes ────────────────────────────────────────────────────────────────
     function fetchNodes() {
-        fetchJSON("/api/nodes", function (rows) {
+        var url = "/api/nodes";
+        if (transportFilter) url += "?transport=" + encodeURIComponent(transportFilter);
+        fetchJSON(url, function (rows) {
             // Capture online node count for scaled interval calculation
             if (rows.length > 0 && rows[0].online_nodes != null) {
                 onlineNodeCount = rows[0].online_nodes;
@@ -493,7 +530,12 @@
                     last_seen: n.last_seen,
                     last_activity: n.last_activity,
                     last_nodeinfo: n.last_nodeinfo,
-                    never_heard: neverHeard
+                    never_heard: neverHeard,
+                    mqtt_count: n.mqtt_count || 0,
+                    direct_rf_count: n.direct_rf_count || 0,
+                    rf_count: n.rf_count || 0,
+                    last_rf: n.last_rf,
+                    last_mqtt: n.last_mqtt
                 };
             });
             renderNodes();
@@ -583,8 +625,9 @@
             var toggleChar = isExpanded ? "\u25BC" : "\u25B6";
 
             // Node status indicator
-            var ns = nodeStatus(n.last_activity, n.last_nodeinfo);
+            var ns = nodeStatus(n.last_activity, n.last_nodeinfo, n);
             var statusDot = '<span class="node-status-dot node-status-' + ns.status + '" title="' + esc(ns.label + ": " + ns.tooltip) + '"></span>';
+            var ntIcon = nodeTransportIcon(n);
 
             var pos = positionsMap[n.node_id];
             var pinHtml = "";
@@ -607,7 +650,7 @@
             var rowHtml = '<tr class="node-row" data-node="' + esc(n.node_id) + '">' +
                 '<td class="th-star"><button class="' + starClass + '" data-node="' + esc(n.node_id) + '">' + starChar + '</button>' +
                 '<button class="telemetry-toggle" data-node="' + esc(n.node_id) + '" title="Toggle telemetry">' + toggleChar + '</button></td>' +
-                "<td>" + statusDot + " " + esc(n.node_id) + pinHtml + "</td>" +
+                "<td>" + statusDot + ntIcon + " " + esc(n.node_id) + pinHtml + "</td>" +
                 "<td>" + displayNodeName(n.long_name, n.short_name, n.node_id, n.never_heard) + "</td>" +
                 "<td>" + esc(n.hw) + "</td>" +
                 "<td>" + firstSeenDisplay + "</td>" +
@@ -664,6 +707,7 @@
         var node = document.getElementById("filter-node").value.trim();
         if (msgType) params.push("msg_type=" + encodeURIComponent(msgType));
         if (node) params.push("node=" + encodeURIComponent(node));
+        if (transportFilter) params.push("transport=" + encodeURIComponent(transportFilter));
 
         var url = "/api/traffic" + (params.length ? "?" + params.join("&") : "");
         fetchJSON(url, function (rows) {
@@ -749,9 +793,10 @@
             }
 
             var lockHtml = encryptionIcon(r.key_used);
+            var tIcon = transportIcon(r.via_mqtt, r.hop_start, r.hop_limit);
 
             return "<tr>" +
-                "<td>" + lockHtml + " " + fmtTime(r.timestamp) + "</td>" +
+                "<td>" + lockHtml + tIcon + " " + fmtTime(r.timestamp) + "</td>" +
                 "<td>" + srcDisplay + "</td>" +
                 "<td>" + dstDisplay + "</td>" +
                 '<td><span class="badge ' + badgeClass(r.msg_type) + '">' + esc(r.msg_type) + '</span>' + pinHtml + '</td>' +
@@ -926,13 +971,14 @@
 
     // ── Metrics ──────────────────────────────────────────────────────────────
     function fetchMetrics() {
-        fetchJSON("/api/metrics", function (data) {
+        var tp = transportFilter ? "?transport=" + encodeURIComponent(transportFilter) : "";
+        fetchJSON("/api/metrics" + tp, function (data) {
             renderRfMetrics(data);
             renderChannelUtil(data.channel_utilization || []);
             renderHourlyChart(data.hourly || []);
             renderPacketDetails(data);
         });
-        fetchJSON("/api/metrics/activity", function (data) {
+        fetchJSON("/api/metrics/activity" + tp, function (data) {
             renderActiveNodes(data.top_nodes || []);
             renderPosFrequency(data.position_frequency || []);
         });
@@ -1510,6 +1556,71 @@
         }
         if (keyUsed === "private") {
             return '<svg class="lock-icon lock-private" title="Private channel (encrypted)" viewBox="0 0 16 16"><title>Private channel (encrypted)</title><path d="M5 7V4a3 3 0 0 1 6 0v3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/></svg>';
+        }
+        return "";
+    }
+
+    // ── Transport Icon Helpers ─────────────────────────────────────────────
+    function transportIcon(viaMqtt, hopStart, hopLimit) {
+        if (viaMqtt) {
+            return '<svg class="transport-icon transport-mqtt" viewBox="0 0 16 16"><title>MQTT-routed</title>' +
+                '<path d="M4.5 11C2.6 11 1 9.7 1 8s1.6-3 3.5-3c.4-1.7 2-3 3.8-3 1.5 0 2.8.8 3.4 2 .2 0 .5-.1.8-.1C14.4 3.9 16 5.3 16 7s-1.6 3.1-3.5 3.1" ' +
+                'fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '<path d="M4 13h8" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.4"/>' +
+                '</svg>';
+        }
+        if (hopStart && hopStart > 0 && hopStart === hopLimit) {
+            // Direct RF: antenna with 2 arcs
+            return '<svg class="transport-icon transport-direct-rf" viewBox="0 0 16 16"><title>Direct RF (0 hops)</title>' +
+                '<line x1="8" y1="14" x2="8" y2="5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
+                '<circle cx="8" cy="4" r="1.2" fill="currentColor"/>' +
+                '<path d="M5 7a4 4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
+                '<path d="M3.5 5.5a6.5 6.5 0 0 1 9 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
+                '</svg>';
+        }
+        // RF-relayed (or unknown hop_start)
+        var hops = (hopStart && hopLimit != null && hopStart > 0) ? (hopStart - hopLimit) : null;
+        var tip = "RF-relayed";
+        if (hops != null) tip += " (" + hops + " hop" + (hops !== 1 ? "s" : "") + ")";
+        else tip += " (hop count unknown)";
+        return '<svg class="transport-icon transport-rf-relayed" viewBox="0 0 16 16"><title>' + esc(tip) + '</title>' +
+            '<line x1="8" y1="14" x2="8" y2="5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
+            '<circle cx="8" cy="4" r="1.2" fill="currentColor"/>' +
+            '<path d="M5 7a4 4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
+            '</svg>';
+    }
+
+    function nodeTransportClass(node) {
+        if (!node) return "unknown";
+        if (node.direct_rf_count > 0) return "direct_rf";
+        if (node.rf_count > 0) return "rf_relayed";
+        if (node.mqtt_count > 0) return "mqtt_only";
+        return "unknown";
+    }
+
+    function nodeTransportIcon(node) {
+        var cls = nodeTransportClass(node);
+        if (cls === "direct_rf") {
+            return '<svg class="transport-icon transport-direct-rf" viewBox="0 0 16 16"><title>Direct RF observed</title>' +
+                '<line x1="8" y1="14" x2="8" y2="5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
+                '<circle cx="8" cy="4" r="1.2" fill="currentColor"/>' +
+                '<path d="M5 7a4 4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
+                '<path d="M3.5 5.5a6.5 6.5 0 0 1 9 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
+                '</svg>';
+        }
+        if (cls === "rf_relayed") {
+            return '<svg class="transport-icon transport-rf-relayed" viewBox="0 0 16 16"><title>RF-relayed only (never direct)</title>' +
+                '<line x1="8" y1="14" x2="8" y2="5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
+                '<circle cx="8" cy="4" r="1.2" fill="currentColor"/>' +
+                '<path d="M5 7a4 4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
+                '</svg>';
+        }
+        if (cls === "mqtt_only") {
+            return '<svg class="transport-icon transport-mqtt" viewBox="0 0 16 16"><title>MQTT only (never heard over RF)</title>' +
+                '<path d="M4.5 11C2.6 11 1 9.7 1 8s1.6-3 3.5-3c.4-1.7 2-3 3.8-3 1.5 0 2.8.8 3.4 2 .2 0 .5-.1.8-.1C14.4 3.9 16 5.3 16 7s-1.6 3.1-3.5 3.1" ' +
+                'fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '<path d="M4 13h8" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.4"/>' +
+                '</svg>';
         }
         return "";
     }

@@ -40,7 +40,10 @@ def init_db(debug=False):
             port_num     INTEGER,
             msg_type     TEXT NOT NULL,
             data         TEXT,
-            key_used     TEXT
+            key_used     TEXT,
+            via_mqtt     INTEGER DEFAULT 0,
+            hop_start    INTEGER,
+            hop_limit    INTEGER
         );
 
         CREATE TABLE IF NOT EXISTS packets_raw (
@@ -52,6 +55,7 @@ def init_db(debug=False):
             channel_hash TEXT,
             flags        TEXT,
             hop_limit    INTEGER,
+            hop_start    INTEGER,
             want_ack     INTEGER,
             via_mqtt     INTEGER,
             packet_size  INTEGER,
@@ -59,6 +63,21 @@ def init_db(debug=False):
             key_used     TEXT
         );
     """)
+
+    # Auto-migrate existing databases: add columns if missing
+    _migrations = [
+        ("traffic", "via_mqtt", "ALTER TABLE traffic ADD COLUMN via_mqtt INTEGER DEFAULT 0"),
+        ("traffic", "hop_start", "ALTER TABLE traffic ADD COLUMN hop_start INTEGER"),
+        ("traffic", "hop_limit", "ALTER TABLE traffic ADD COLUMN hop_limit INTEGER"),
+        ("packets_raw", "hop_start", "ALTER TABLE packets_raw ADD COLUMN hop_start INTEGER"),
+    ]
+    for table, column, ddl in _migrations:
+        cols = [row[1] for row in _conn.execute(f"PRAGMA table_info({table})").fetchall()]
+        if column not in cols:
+            if debug:
+                print(f"[DEBUG] Migrating: {ddl}")
+            _conn.execute(ddl)
+
     _conn.commit()
 
 
@@ -131,7 +150,8 @@ def ensure_node(node_id, timestamp=None):
 
 
 def log_traffic(timestamp, source_id, dest_id, packet_id=None, channel_hash=None,
-                channel_name=None, port_num=None, msg_type="UNKNOWN", data=None, key_used=None):
+                channel_name=None, port_num=None, msg_type="UNKNOWN", data=None, key_used=None,
+                via_mqtt=False, hop_start=None, hop_limit=None):
     if _conn is None:
         return
     import json as _json
@@ -150,26 +170,28 @@ def log_traffic(timestamp, source_id, dest_id, packet_id=None, channel_hash=None
     _conn.execute("""
         INSERT INTO traffic (timestamp, source_id, source_name, dest_id, dest_name,
                              packet_id, channel_hash, channel_name, port_num,
-                             msg_type, data, key_used)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             msg_type, data, key_used, via_mqtt, hop_start, hop_limit)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (str(timestamp), source_id, source_name, dest_id, dest_name,
           packet_id, channel_hash, channel_name, port_num,
-          msg_type, data_str, key_used))
+          msg_type, data_str, key_used,
+          1 if via_mqtt else 0, hop_start, hop_limit))
     _conn.commit()
 
 def log_raw_packet(timestamp, source_id, dest_id, packet_id=None,
                    channel_hash=None, flags=None, hop_limit=None,
-                   want_ack=None, via_mqtt=None, packet_size=None,
-                   decrypted=False, key_used=None):
+                   hop_start=None, want_ack=None, via_mqtt=None,
+                   packet_size=None, decrypted=False, key_used=None):
     if _conn is None:
         return
     _conn.execute("""
         INSERT INTO packets_raw (timestamp, source_id, dest_id, packet_id,
-                                 channel_hash, flags, hop_limit, want_ack,
-                                 via_mqtt, packet_size, decrypted, key_used)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                 channel_hash, flags, hop_limit, hop_start,
+                                 want_ack, via_mqtt, packet_size, decrypted,
+                                 key_used)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (str(timestamp), source_id, dest_id, packet_id,
-          channel_hash, flags, hop_limit,
+          channel_hash, flags, hop_limit, hop_start,
           1 if want_ack else 0, 1 if via_mqtt else 0,
           packet_size, 1 if decrypted else 0, key_used))
     _conn.commit()

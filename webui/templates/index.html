@@ -13,6 +13,11 @@
         <div class="header-left">
             <button id="sidebar-toggle" class="sidebar-toggle" title="Toggle Stats">&#9776;</button>
             <h1>Meshtastic SDR Dashboard</h1>
+            <select id="transport-filter" class="transport-filter-select" title="Filter by transport type">
+                <option value="">All Traffic</option>
+                <option value="rf">RF Only</option>
+                <option value="mqtt">MQTT Only</option>
+            </select>
         </div>
         <span id="last-update" class="muted">&mdash;</span>
     </header>
@@ -105,6 +110,7 @@
                     <span class="status-legend-item" title="Active traffic but NodeInfo not updated in &gt;3h"><span class="node-status-dot node-status-hiding"></span>Hiding</span>
                     <span class="status-legend-item" title="Last traffic 2-4h ago, no recent NodeInfo"><span class="node-status-dot node-status-dormant"></span>Dormant</span>
                     <span class="status-legend-item" title="Not heard from in &gt;4h"><span class="node-status-dot node-status-offline"></span>Offline</span>
+                    <span class="status-legend-item" title="Only seen via MQTT (never heard over RF)"><span class="node-status-dot node-status-mqtt"></span>MQTT</span>
                 </div>
             </div>
             <div class="filters">
