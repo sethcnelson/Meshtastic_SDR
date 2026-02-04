@@ -97,7 +97,15 @@
 
         <!-- Node Directory Panel -->
         <section id="panel-nodes" class="panel">
-            <h2>Node Directory</h2>
+            <div class="panel-header">
+                <h2>Node Directory</h2>
+                <div class="status-legend">
+                    <span class="status-legend-item" title="Heard from within 2h"><span class="node-status-dot node-status-active"></span>Active</span>
+                    <span class="status-legend-item" title="NodeInfo within 3h but no other recent traffic"><span class="node-status-dot node-status-quiet"></span>Quiet</span>
+                    <span class="status-legend-item" title="Active but NodeInfo not updated in &gt;3h"><span class="node-status-dot node-status-hiding"></span>Hiding</span>
+                    <span class="status-legend-item" title="Not heard from in &gt;4h"><span class="node-status-dot node-status-offline"></span>Offline</span>
+                </div>
+            </div>
             <div class="filters">
                 <input type="text" id="node-filter" placeholder="Filter nodes...">
             </div>

@@ -36,7 +36,39 @@ def api_nodes():
         "       first_seen, last_seen "
         "FROM nodes ORDER BY last_seen DESC"
     ).fetchall()
-    return jsonify([dict(r) for r in rows])
+
+    # Enrich with last activity and last nodeinfo timestamps
+    # Last non-NODEINFO traffic per node (any activity)
+    activity_rows = db_conn.execute(
+        "SELECT source_id, MAX(timestamp) AS last_activity "
+        "FROM traffic "
+        "GROUP BY source_id"
+    ).fetchall()
+    activity_map = {r["source_id"]: r["last_activity"] for r in activity_rows}
+
+    # Last NODEINFO_APP per node
+    nodeinfo_rows = db_conn.execute(
+        "SELECT source_id, MAX(timestamp) AS last_nodeinfo "
+        "FROM traffic WHERE msg_type = 'NODEINFO_APP' "
+        "GROUP BY source_id"
+    ).fetchall()
+    nodeinfo_map = {r["source_id"]: r["last_nodeinfo"] for r in nodeinfo_rows}
+
+    # Count online nodes (active in last 2h) for scaled interval calculation
+    online_count = db_conn.execute(
+        "SELECT COUNT(DISTINCT source_id) FROM traffic "
+        "WHERE timestamp >= datetime('now', '-2 hours')"
+    ).fetchone()[0]
+
+    result = []
+    for r in rows:
+        node = dict(r)
+        node["last_activity"] = activity_map.get(r["node_id"])
+        node["last_nodeinfo"] = nodeinfo_map.get(r["node_id"])
+        node["online_nodes"] = online_count
+        result.append(node)
+
+    return jsonify(result)
 
 
 @app.route("/api/traffic")
@@ -369,16 +401,23 @@ def api_metrics():
         }
 
         # Duplicate packet detection (same packet_id seen multiple times)
+        # These are mesh rebroadcasts — the same original packet relayed by different nodes
         dup_row = db_conn.execute(
-            "SELECT COUNT(*) AS dup_count FROM ("
-            "  SELECT packet_id FROM packets_raw "
+            "SELECT COUNT(*) AS dup_ids, SUM(cnt) AS dup_total FROM ("
+            "  SELECT packet_id, COUNT(*) AS cnt FROM packets_raw "
             "  WHERE packet_id IS NOT NULL "
             "  GROUP BY packet_id HAVING COUNT(*) > 1"
             ")"
         ).fetchone()
+        unique_ids = db_conn.execute(
+            "SELECT COUNT(DISTINCT packet_id) FROM packets_raw "
+            "WHERE packet_id IS NOT NULL"
+        ).fetchone()[0]
         total_raw = db_conn.execute("SELECT COUNT(*) FROM packets_raw").fetchone()[0]
         result["duplicates"] = {
-            "unique_packet_ids_with_dupes": dup_row["dup_count"],
+            "rebroadcast_packet_ids": dup_row["dup_ids"] or 0,
+            "rebroadcast_total_copies": dup_row["dup_total"] or 0,
+            "unique_packet_ids": unique_ids or 0,
             "total_packets": total_raw,
         }
 

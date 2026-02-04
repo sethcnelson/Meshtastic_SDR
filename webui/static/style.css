@@ -399,6 +399,51 @@ tr.node-row:hover td {
     color: var(--orange);
 }
 
+/* ── Node Status Dots ───────────────────────────────────────────────────── */
+
+.node-status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    vertical-align: middle;
+    margin-right: 4px;
+    cursor: default;
+}
+
+.node-status-active {
+    background: var(--green);
+    box-shadow: 0 0 4px var(--green);
+}
+
+.node-status-quiet {
+    background: var(--accent);
+}
+
+.node-status-hiding {
+    background: var(--orange);
+    box-shadow: 0 0 4px var(--orange);
+}
+
+.node-status-offline {
+    background: var(--text-muted);
+    opacity: 0.5;
+}
+
+.status-legend {
+    display: flex;
+    gap: 10px;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.status-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    cursor: default;
+}
+
 /* ── Unnamed Node ────────────────────────────────────────────────────────── */
 
 .node-unnamed-id {

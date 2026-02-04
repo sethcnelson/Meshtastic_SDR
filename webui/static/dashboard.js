@@ -405,9 +405,61 @@
             ' <span class="node-unnamed">(unresolved)</span>';
     }
 
+    // ── Scaled Broadcast Interval ───────────────────────────────────────────
+    // Meshtastic scales intervals when >40 nodes are online in a 2h window
+    // ScaledInterval = Interval * (1.0 + ((NumberOfOnlineNodes - 40) * 0.075))
+    var DEFAULT_POS_INTERVAL = 900;   // 15 min
+    var DEFAULT_TELEM_INTERVAL = 1800; // 30 min
+    var DEFAULT_NODEINFO_INTERVAL = 10800; // 3 hours
+    var onlineNodeCount = 0;
+
+    function scaledInterval(baseInterval, nodeCount) {
+        if (nodeCount <= 40) return baseInterval;
+        return baseInterval * (1.0 + ((nodeCount - 40) * 0.075));
+    }
+
+    // ── Node Status ─────────────────────────────────────────────────────────
+    // active (green):  heard from within 2h
+    // quiet (blue):    nodeinfo updated within 3h but no other recent traffic
+    // hiding (orange): active (recent traffic) but nodeinfo not updated in >3h
+    // offline (grey):  not heard from in >4h
+    function nodeStatus(lastActivity, lastNodeinfo) {
+        var now = Date.now();
+        var actAge = lastActivity ? (now - new Date(lastActivity).getTime()) : Infinity;
+        var niAge = lastNodeinfo ? (now - new Date(lastNodeinfo).getTime()) : Infinity;
+        var H2 = 2 * 3600000;
+        var H3 = 3 * 3600000;
+        var H4 = 4 * 3600000;
+
+        if (actAge <= H2) {
+            // Recently active
+            if (niAge > H3) {
+                return { status: "hiding", label: "Hiding", color: "var(--orange)",
+                    tooltip: "Active (traffic within 2h) but NODEINFO not updated in >" + fmtDuration(Math.round(niAge / 1000)) };
+            }
+            return { status: "active", label: "Active", color: "var(--green)",
+                tooltip: "Heard from " + fmtDuration(Math.round(actAge / 1000)) + " ago" };
+        }
+        if (niAge <= H3) {
+            return { status: "quiet", label: "Quiet", color: "var(--accent)",
+                tooltip: "NODEINFO within 3h but no other recent traffic" };
+        }
+        if (actAge <= H4 || niAge <= H4) {
+            return { status: "quiet", label: "Quiet", color: "var(--accent)",
+                tooltip: "Last heard " + fmtDuration(Math.round(Math.min(actAge, niAge) / 1000)) + " ago" };
+        }
+        return { status: "offline", label: "Offline", color: "var(--text-muted)",
+            tooltip: "Not heard from in over 4h" };
+    }
+
     // ── Nodes ────────────────────────────────────────────────────────────────
     function fetchNodes() {
         fetchJSON("/api/nodes", function (rows) {
+            // Capture online node count for scaled interval calculation
+            if (rows.length > 0 && rows[0].online_nodes != null) {
+                onlineNodeCount = rows[0].online_nodes;
+            }
+
             nodesData = rows.map(function (n) {
                 var hw = n.hw_model != null ? (HW_MODELS[n.hw_model] || ("ID " + n.hw_model)) : "\u2014";
                 return {
@@ -417,11 +469,47 @@
                     cols: [n.node_id, n.long_name || n.short_name || n.node_id, hw, n.first_seen || "", n.last_seen || ""],
                     hw: hw,
                     first_seen: n.first_seen,
-                    last_seen: n.last_seen
+                    last_seen: n.last_seen,
+                    last_activity: n.last_activity,
+                    last_nodeinfo: n.last_nodeinfo
                 };
             });
             renderNodes();
+            renderScaledIntervals();
         });
+    }
+
+    function renderScaledIntervals() {
+        // Show expected broadcast intervals in the sidebar
+        var container = document.getElementById("pos-frequency");
+        if (!container) return;
+
+        var scaledPos = scaledInterval(DEFAULT_POS_INTERVAL, onlineNodeCount);
+        var scaledTelem = scaledInterval(DEFAULT_TELEM_INTERVAL, onlineNodeCount);
+        var scaledNI = scaledInterval(DEFAULT_NODEINFO_INTERVAL, onlineNodeCount);
+
+        var header = document.querySelector('h3 + #pos-frequency');
+        // Insert interval info before pos-frequency if not already present
+        var infoEl = document.getElementById("scaled-intervals");
+        if (!infoEl) {
+            infoEl = document.createElement("div");
+            infoEl.id = "scaled-intervals";
+            infoEl.className = "rf-metrics";
+            infoEl.style.marginBottom = "8px";
+            container.parentNode.insertBefore(infoEl, container);
+        }
+
+        var html = '<div class="rf-section-label">' + onlineNodeCount + ' nodes online (2h window)</div>';
+        if (onlineNodeCount > 40) {
+            html += rfRow("Position interval", fmtDuration(Math.round(scaledPos)) + " (scaled from 15m)", "");
+            html += rfRow("Telemetry interval", fmtDuration(Math.round(scaledTelem)) + " (scaled from 30m)", "");
+            html += rfRow("NodeInfo interval", fmtDuration(Math.round(scaledNI)) + " (scaled from 3h)", "");
+        } else {
+            html += rfRow("Position interval", "15m (default)", "");
+            html += rfRow("Telemetry interval", "30m (default)", "");
+            html += rfRow("NodeInfo interval", "3h (default)", "");
+        }
+        infoEl.innerHTML = html;
     }
 
     function renderNodes() {
@@ -473,6 +561,10 @@
             var isExpanded = !!expandedTelemetry[n.node_id];
             var toggleChar = isExpanded ? "\u25BC" : "\u25B6";
 
+            // Node status indicator
+            var ns = nodeStatus(n.last_activity, n.last_nodeinfo);
+            var statusDot = '<span class="node-status-dot node-status-' + ns.status + '" title="' + esc(ns.label + ": " + ns.tooltip) + '"></span>';
+
             var pos = positionsMap[n.node_id];
             var pinHtml = "";
             if (pos) {
@@ -491,7 +583,7 @@
             var rowHtml = '<tr class="node-row" data-node="' + esc(n.node_id) + '">' +
                 '<td class="th-star"><button class="' + starClass + '" data-node="' + esc(n.node_id) + '">' + starChar + '</button>' +
                 '<button class="telemetry-toggle" data-node="' + esc(n.node_id) + '" title="Toggle telemetry">' + toggleChar + '</button></td>' +
-                "<td>" + esc(n.node_id) + pinHtml + "</td>" +
+                "<td>" + statusDot + " " + esc(n.node_id) + pinHtml + "</td>" +
                 "<td>" + displayNodeName(n.long_name, n.short_name, n.node_id) + "</td>" +
                 "<td>" + esc(n.hw) + "</td>" +
                 "<td>" + fmtTime(n.first_seen) + "</td>" +
@@ -919,12 +1011,16 @@
             html += rfRow("Max", sizes.max + "", "");
         }
 
-        // Duplicates
+        // Duplicates (mesh rebroadcasts)
         var dups = data.duplicates;
-        if (dups) {
-            html += '<div class="rf-section-label">Packet Duplicates</div>';
-            html += rfRow("IDs with dupes", dups.unique_packet_ids_with_dupes.toLocaleString(), "");
-            html += rfRow("Total packets", dups.total_packets.toLocaleString(), "");
+        if (dups && dups.total_packets > 0) {
+            var rebroadcastPct = dups.total_packets > 0
+                ? ((dups.rebroadcast_total_copies - dups.rebroadcast_packet_ids) / dups.total_packets * 100).toFixed(1)
+                : "0";
+            html += '<div class="rf-section-label" title="Same packet_id heard multiple times — mesh nodes rebroadcasting/relaying the same original packet">Mesh Rebroadcasts</div>';
+            html += rfRow("Unique packets", dups.unique_packet_ids.toLocaleString(), "");
+            html += rfRow("Rebroadcast", dups.rebroadcast_packet_ids.toLocaleString() + " pkts", "");
+            html += rfRow("Extra copies", (dups.rebroadcast_total_copies - dups.rebroadcast_packet_ids).toLocaleString() + " (" + rebroadcastPct + "%)", "");
         }
 
         // Via MQTT
@@ -984,16 +1080,22 @@
 
         container.innerHTML = entries.map(function (e) {
             var name = e.source_name || e.source_id;
-            var interval;
-            if (e.avg_interval_secs < 60) {
-                interval = e.avg_interval_secs + "s";
-            } else if (e.avg_interval_secs < 3600) {
-                interval = Math.round(e.avg_interval_secs / 60) + "m";
-            } else {
-                interval = Math.round(e.avg_interval_secs / 3600) + "h";
-            }
-            return rfRow(esc(name), e.pos_count + " (\u00F8 " + interval + ")", "");
+            var interval = fmtDuration(e.avg_interval_secs);
+            var tooltip = e.pos_count + " position updates in 24h, averaging every " + interval;
+            return '<div class="rf-metric-row" title="' + esc(tooltip) + '">' +
+                '<span class="rf-metric-label">' + esc(name) + '</span>' +
+                '<span class="rf-metric-value">' + e.pos_count + ' / ' + interval + '</span>' +
+                '</div>';
         }).join("");
+    }
+
+    function fmtDuration(secs) {
+        if (secs == null || secs === 0) return "\u2014";
+        if (secs < 60) return secs + "s";
+        if (secs < 3600) return Math.round(secs / 60) + "m " + (secs % 60) + "s";
+        var h = Math.floor(secs / 3600);
+        var m = Math.round((secs % 3600) / 60);
+        return h + "h " + m + "m";
     }
 
     // ── Node Telemetry ──────────────────────────────────────────────────────
