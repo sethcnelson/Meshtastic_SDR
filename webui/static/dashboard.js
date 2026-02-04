@@ -419,37 +419,51 @@
     }
 
     // ── Node Status ─────────────────────────────────────────────────────────
-    // active (green):  heard from within 2h
-    // quiet (blue):    nodeinfo updated within 3h but no other recent traffic
-    // hiding (orange): active (recent traffic) but nodeinfo not updated in >3h
-    // offline (grey):  not heard from in >4h
+    // active (green):   heard from within 2h
+    // quiet (blue):     nodeinfo within 3h but activity >2h (idle but known online)
+    // hiding (orange):  active (<2h traffic) but nodeinfo stale (>3h) or never sent
+    //                   — only if node HAS sent nodeinfo before (otherwise just active)
+    // dormant (purple): activity 2-4h, nodeinfo >3h or never sent
+    // offline (grey):   not heard from in >4h, or never heard from at all
     function nodeStatus(lastActivity, lastNodeinfo) {
         var now = Date.now();
         var actAge = lastActivity ? (now - new Date(lastActivity).getTime()) : Infinity;
         var niAge = lastNodeinfo ? (now - new Date(lastNodeinfo).getTime()) : Infinity;
+        var hasNodeinfo = lastNodeinfo != null;
         var H2 = 2 * 3600000;
         var H3 = 3 * 3600000;
         var H4 = 4 * 3600000;
 
+        // Active: heard from within 2h
         if (actAge <= H2) {
-            // Recently active
-            if (niAge > H3) {
+            // Hiding: active but nodeinfo stale — only when they HAVE sent nodeinfo before
+            if (hasNodeinfo && niAge > H3) {
                 return { status: "hiding", label: "Hiding", color: "var(--orange)",
-                    tooltip: "Active (traffic within 2h) but NODEINFO not updated in >" + fmtDuration(Math.round(niAge / 1000)) };
+                    tooltip: "Active (traffic " + fmtDuration(Math.round(actAge / 1000)) + " ago) but NODEINFO last sent " + fmtDuration(Math.round(niAge / 1000)) + " ago" };
             }
             return { status: "active", label: "Active", color: "var(--green)",
                 tooltip: "Heard from " + fmtDuration(Math.round(actAge / 1000)) + " ago" };
         }
-        if (niAge <= H3) {
+
+        // Quiet: nodeinfo within 3h but activity >2h
+        if (hasNodeinfo && niAge <= H3) {
             return { status: "quiet", label: "Quiet", color: "var(--accent)",
-                tooltip: "NODEINFO within 3h but no other recent traffic" };
+                tooltip: "NODEINFO " + fmtDuration(Math.round(niAge / 1000)) + " ago, last traffic " + fmtDuration(Math.round(actAge / 1000)) + " ago" };
         }
-        if (actAge <= H4 || niAge <= H4) {
-            return { status: "quiet", label: "Quiet", color: "var(--accent)",
-                tooltip: "Last heard " + fmtDuration(Math.round(Math.min(actAge, niAge) / 1000)) + " ago" };
+
+        // Dormant: activity 2-4h, nodeinfo >3h or never
+        if (actAge <= H4) {
+            return { status: "dormant", label: "Dormant", color: "var(--purple)",
+                tooltip: "Last traffic " + fmtDuration(Math.round(actAge / 1000)) + " ago" + (hasNodeinfo ? ", NODEINFO " + fmtDuration(Math.round(niAge / 1000)) + " ago" : ", no NODEINFO ever sent") };
+        }
+
+        // Offline: >4h or never heard from
+        if (actAge === Infinity) {
+            return { status: "offline", label: "Offline", color: "var(--text-muted)",
+                tooltip: "Never heard from directly (only seen as a destination)" };
         }
         return { status: "offline", label: "Offline", color: "var(--text-muted)",
-            tooltip: "Not heard from in over 4h" };
+            tooltip: "Last heard " + fmtDuration(Math.round(actAge / 1000)) + " ago" };
     }
 
     // ── Nodes ────────────────────────────────────────────────────────────────
@@ -488,7 +502,6 @@
         var scaledTelem = scaledInterval(DEFAULT_TELEM_INTERVAL, onlineNodeCount);
         var scaledNI = scaledInterval(DEFAULT_NODEINFO_INTERVAL, onlineNodeCount);
 
-        var header = document.querySelector('h3 + #pos-frequency');
         // Insert interval info before pos-frequency if not already present
         var infoEl = document.getElementById("scaled-intervals");
         if (!infoEl) {
