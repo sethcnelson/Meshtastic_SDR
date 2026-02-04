@@ -396,9 +396,13 @@
     }
 
     // ── Node Name Display Helper ─────────────────────────────────────────────
-    function displayNodeName(longName, shortName, nodeId) {
+    function displayNodeName(longName, shortName, nodeId, neverHeard) {
         if (longName || shortName) {
             return esc(longName || shortName);
+        }
+        if (neverHeard) {
+            return '<span class="node-unnamed-id">' + esc(nodeId) + '</span>' +
+                ' <span class="node-not-heard">(not heard from)</span>';
         }
         // No name resolved — show hex User ID with unresolved label
         return '<span class="node-unnamed-id">' + esc(nodeId) + '</span>' +
@@ -476,6 +480,9 @@
 
             nodesData = rows.map(function (n) {
                 var hw = n.hw_model != null ? (HW_MODELS[n.hw_model] || ("ID " + n.hw_model)) : "\u2014";
+                // A node is "never heard from" if it has no activity in the traffic table
+                // (it was only seen as a destination in someone else's packet)
+                var neverHeard = !n.last_activity;
                 return {
                     node_id: n.node_id,
                     long_name: n.long_name,
@@ -485,7 +492,8 @@
                     first_seen: n.first_seen,
                     last_seen: n.last_seen,
                     last_activity: n.last_activity,
-                    last_nodeinfo: n.last_nodeinfo
+                    last_nodeinfo: n.last_nodeinfo,
+                    never_heard: neverHeard
                 };
             });
             renderNodes();
@@ -593,13 +601,16 @@
                     '" title="' + esc(pinTitle) + '">\u{1F4CD}</a>';
             }
 
+            // Destination-only nodes: empty first_seen
+            var firstSeenDisplay = n.never_heard ? "" : fmtTime(n.first_seen);
+
             var rowHtml = '<tr class="node-row" data-node="' + esc(n.node_id) + '">' +
                 '<td class="th-star"><button class="' + starClass + '" data-node="' + esc(n.node_id) + '">' + starChar + '</button>' +
                 '<button class="telemetry-toggle" data-node="' + esc(n.node_id) + '" title="Toggle telemetry">' + toggleChar + '</button></td>' +
                 "<td>" + statusDot + " " + esc(n.node_id) + pinHtml + "</td>" +
-                "<td>" + displayNodeName(n.long_name, n.short_name, n.node_id) + "</td>" +
+                "<td>" + displayNodeName(n.long_name, n.short_name, n.node_id, n.never_heard) + "</td>" +
                 "<td>" + esc(n.hw) + "</td>" +
-                "<td>" + fmtTime(n.first_seen) + "</td>" +
+                "<td>" + firstSeenDisplay + "</td>" +
                 "<td>" + fmtTime(n.last_seen) + "</td>" +
                 "</tr>";
 
@@ -703,14 +714,22 @@
             });
         }
 
+        // Build a lookup of never-heard nodes from cached nodesData
+        var neverHeardSet = {};
+        nodesData.forEach(function (n) {
+            if (n.never_heard) neverHeardSet[n.node_id] = true;
+        });
+
         tbody.innerHTML = rows.map(function (item) {
             var r = item._raw;
+            var srcNeverHeard = r.source_id ? !!neverHeardSet[r.source_id] : false;
+            var dstNeverHeard = r.dest_id ? !!neverHeardSet[r.dest_id] : false;
             var srcDisplay = r.source_name
                 ? esc(r.source_name)
-                : (r.source_id ? '<span class="node-unnamed-id">' + esc(r.source_id) + '</span> <span class="node-unnamed">(unresolved)</span>' : "\u2014");
+                : (r.source_id ? displayNodeName(null, null, r.source_id, srcNeverHeard) : "\u2014");
             var dstDisplay = r.dest_name
                 ? esc(r.dest_name)
-                : (r.dest_id ? '<span class="node-unnamed-id">' + esc(r.dest_id) + '</span> <span class="node-unnamed">(unresolved)</span>' : "\u2014");
+                : (r.dest_id ? displayNodeName(null, null, r.dest_id, dstNeverHeard) : "\u2014");
             var dataStr = truncate(r.data || "", 60);
 
             // Add pin icon for POSITION_APP with valid coordinates
@@ -775,7 +794,15 @@
 
             container.innerHTML = items.map(function (item) {
                 var node = item.node || {};
-                var nameHtml = displayNodeName(node.long_name, node.short_name, node.node_id);
+                // Check if this watched node has never been heard from
+                var wlNeverHeard = false;
+                for (var wi = 0; wi < nodesData.length; wi++) {
+                    if (nodesData[wi].node_id === node.node_id) {
+                        wlNeverHeard = nodesData[wi].never_heard;
+                        break;
+                    }
+                }
+                var nameHtml = displayNodeName(node.long_name, node.short_name, node.node_id, wlNeverHeard);
                 var hw = node.hw_model != null ? (HW_MODELS[node.hw_model] || ("ID " + node.hw_model)) : "\u2014";
                 var lastSeen = node.last_seen ? fmtTime(node.last_seen) : "\u2014";
 
@@ -1403,7 +1430,17 @@
                 if (p.source_name) {
                     nameHtml = "<b>" + esc(p.source_name) + "</b>";
                 } else {
-                    nameHtml = '<b class="node-unnamed-id">' + esc(p.source_id) + '</b> <span class="node-unnamed">(unresolved)</span>';
+                    // Check if this node has never been heard from directly
+                    var mapNeverHeard = false;
+                    for (var ni = 0; ni < nodesData.length; ni++) {
+                        if (nodesData[ni].node_id === p.source_id) {
+                            mapNeverHeard = nodesData[ni].never_heard;
+                            break;
+                        }
+                    }
+                    var mapLabel = mapNeverHeard ? '(not heard from)' : '(unresolved)';
+                    var mapLabelClass = mapNeverHeard ? 'node-not-heard' : 'node-unnamed';
+                    nameHtml = '<b class="node-unnamed-id">' + esc(p.source_id) + '</b> <span class="' + mapLabelClass + '">' + mapLabel + '</span>';
                 }
                 var isStarred = watchList.indexOf(p.source_id) !== -1;
                 var starChar = isStarred ? "\u2605" : "\u2606";

@@ -463,6 +463,14 @@ tr.node-row:hover td {
     margin-left: 4px;
 }
 
+.node-not-heard {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 11px;
+    margin-left: 4px;
+    opacity: 0.6;
+}
+
 /* ── Filters ─────────────────────────────────────────────────────────────── */
 
 .filters {
