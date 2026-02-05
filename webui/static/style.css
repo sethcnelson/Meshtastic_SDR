@@ -55,6 +55,18 @@ header h1 {
     color: var(--accent);
 }
 
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.online-count {
+    color: var(--green);
+    font-weight: 600;
+    font-size: 12px;
+}
+
 .muted {
     color: var(--text-muted);
 }

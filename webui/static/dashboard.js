@@ -426,17 +426,15 @@
             ' <span class="node-unnamed">(unresolved)</span>';
     }
 
-    // ── Scaled Broadcast Interval ───────────────────────────────────────────
-    // Meshtastic scales intervals when >40 nodes are online in a 2h window
-    // ScaledInterval = Interval * (1.0 + ((NumberOfOnlineNodes - 40) * 0.075))
-    var DEFAULT_POS_INTERVAL = 900;   // 15 min
-    var DEFAULT_TELEM_INTERVAL = 1800; // 30 min
-    var DEFAULT_NODEINFO_INTERVAL = 10800; // 3 hours
+    // Online node count (active in last 2h)
     var onlineNodeCount = 0;
 
-    function scaledInterval(baseInterval, nodeCount) {
-        if (nodeCount <= 40) return baseInterval;
-        return baseInterval * (1.0 + ((nodeCount - 40) * 0.075));
+    function updateOnlineCount() {
+        var el = document.getElementById("online-count");
+        if (el) {
+            el.textContent = onlineNodeCount + " online";
+            el.title = onlineNodeCount + " nodes active in last 2 hours";
+        }
     }
 
     // ── Node Status ─────────────────────────────────────────────────────────
@@ -510,10 +508,13 @@
         var url = "/api/nodes";
         if (transportFilter) url += "?transport=" + encodeURIComponent(transportFilter);
         fetchJSON(url, function (rows) {
-            // Capture online node count for scaled interval calculation
+            // Capture online node count
             if (rows.length > 0 && rows[0].online_nodes != null) {
                 onlineNodeCount = rows[0].online_nodes;
+            } else {
+                onlineNodeCount = 0;
             }
+            updateOnlineCount();
 
             nodesData = rows.map(function (n) {
                 var hw = n.hw_model != null ? (HW_MODELS[n.hw_model] || ("ID " + n.hw_model)) : "\u2014";
@@ -539,41 +540,9 @@
                 };
             });
             renderNodes();
-            renderScaledIntervals();
         });
     }
 
-    function renderScaledIntervals() {
-        // Show expected broadcast intervals in the sidebar
-        var container = document.getElementById("pos-frequency");
-        if (!container) return;
-
-        var scaledPos = scaledInterval(DEFAULT_POS_INTERVAL, onlineNodeCount);
-        var scaledTelem = scaledInterval(DEFAULT_TELEM_INTERVAL, onlineNodeCount);
-        var scaledNI = scaledInterval(DEFAULT_NODEINFO_INTERVAL, onlineNodeCount);
-
-        // Insert interval info before pos-frequency if not already present
-        var infoEl = document.getElementById("scaled-intervals");
-        if (!infoEl) {
-            infoEl = document.createElement("div");
-            infoEl.id = "scaled-intervals";
-            infoEl.className = "rf-metrics";
-            infoEl.style.marginBottom = "8px";
-            container.parentNode.insertBefore(infoEl, container);
-        }
-
-        var html = '<div class="rf-section-label">' + onlineNodeCount + ' nodes online (2h window)</div>';
-        if (onlineNodeCount > 40) {
-            html += rfRow("Position interval", fmtDuration(Math.round(scaledPos)) + " (scaled from 15m)", "");
-            html += rfRow("Telemetry interval", fmtDuration(Math.round(scaledTelem)) + " (scaled from 30m)", "");
-            html += rfRow("NodeInfo interval", fmtDuration(Math.round(scaledNI)) + " (scaled from 3h)", "");
-        } else {
-            html += rfRow("Position interval", "15m (default)", "");
-            html += rfRow("Telemetry interval", "30m (default)", "");
-            html += rfRow("NodeInfo interval", "3h (default)", "");
-        }
-        infoEl.innerHTML = html;
-    }
 
     function renderNodes() {
         var tbody = document.querySelector("#nodes-table tbody");
@@ -1507,13 +1476,32 @@
                     detailHtml +
                     '<small class="popup-pos-time">Position updated ' + fmtTime(p.timestamp) + '</small>';
 
+                // Determine marker color based on transport classification
+                var nodeData = null;
+                for (var ni = 0; ni < nodesData.length; ni++) {
+                    if (nodesData[ni].node_id === p.source_id) {
+                        nodeData = nodesData[ni];
+                        break;
+                    }
+                }
+                var markerColor = "#58a6ff"; // default blue
+                var tClass = nodeTransportClass(nodeData);
+                if (tClass === "direct_rf") {
+                    markerColor = "#3fb950"; // green
+                } else if (tClass === "rf_relayed") {
+                    markerColor = "#d29922"; // yellow/orange
+                } else if (tClass === "mqtt_only") {
+                    markerColor = "#58a6ff"; // blue
+                }
+
                 if (markers[p.source_id]) {
                     markers[p.source_id].setLatLng(latlng).setPopupContent(popup);
+                    markers[p.source_id].setStyle({ color: markerColor, fillColor: markerColor });
                 } else {
                     markers[p.source_id] = L.circleMarker(latlng, {
                         radius: 6,
-                        color: "#58a6ff",
-                        fillColor: "#58a6ff",
+                        color: markerColor,
+                        fillColor: markerColor,
                         fillOpacity: 0.7,
                         weight: 1
                     }).addTo(map).bindPopup(popup);
