@@ -8,9 +8,21 @@ import sqlite3
 import sys
 
 from flask import Flask, jsonify, render_template, request
+import traceback
 
 app = Flask(__name__)
 db_conn = None
+
+
+# ── Error Handler ──────────────────────────────────────────────────────────────
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Return JSON error for API routes, HTML for others."""
+    traceback.print_exc()
+    if request.path.startswith('/api/'):
+        return jsonify({"error": str(e)}), 500
+    return f"<h1>500 Internal Server Error</h1><p>{e}</p>", 500
 
 
 def get_db(db_path):

@@ -1549,33 +1549,28 @@
     }
 
     // ── Transport Icon Helpers ─────────────────────────────────────────────
+    // SVG icon templates (from webui/icons/)
+    var ICON_ANTENNA_5 = '<svg class="transport-icon transport-direct-rf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M6 18l0 -3"/><path d="M10 18l0 -6"/><path d="M14 18l0 -9"/><path d="M18 18l0 -12"/></svg>';
+    var ICON_ANTENNA_3 = '<svg class="transport-icon transport-rf-relayed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M6 18l0 -3"/><path d="M10 18l0 -6"/><path d="M14 18l0 .01"/><path d="M18 18l0 .01"/></svg>';
+    var ICON_CLOUD_SHARE = '<svg class="transport-icon transport-mqtt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M12.5 18.004h-5.843c-2.572 -.004 -4.657 -2.011 -4.657 -4.487c0 -2.475 2.085 -4.482 4.657 -4.482c.393 -1.762 1.794 -3.2 3.675 -3.773c1.88 -.572 3.956 -.193 5.444 1c1.488 1.19 2.162 3.007 1.77 4.769h.99c1.41 0 2.624 .848 3.164 2.065"/>' +
+        '<path d="M16 22l5 -5"/><path d="M21 21.5v-4.5h-4.5"/></svg>';
+
     function transportIcon(viaMqtt, hopStart, hopLimit) {
         if (viaMqtt) {
-            return '<svg class="transport-icon transport-mqtt" viewBox="0 0 16 16"><title>MQTT-routed</title>' +
-                '<path d="M4.5 11C2.6 11 1 9.7 1 8s1.6-3 3.5-3c.4-1.7 2-3 3.8-3 1.5 0 2.8.8 3.4 2 .2 0 .5-.1.8-.1C14.4 3.9 16 5.3 16 7s-1.6 3.1-3.5 3.1" ' +
-                'fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>' +
-                '<path d="M4 13h8" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.4"/>' +
-                '</svg>';
+            return ICON_CLOUD_SHARE.replace('</svg>', '<title>MQTT-routed</title></svg>');
         }
         if (hopStart && hopStart > 0 && hopStart === hopLimit) {
-            // Direct RF: antenna with 2 arcs
-            return '<svg class="transport-icon transport-direct-rf" viewBox="0 0 16 16"><title>Direct RF (0 hops)</title>' +
-                '<line x1="8" y1="14" x2="8" y2="5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
-                '<circle cx="8" cy="4" r="1.2" fill="currentColor"/>' +
-                '<path d="M5 7a4 4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
-                '<path d="M3.5 5.5a6.5 6.5 0 0 1 9 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
-                '</svg>';
+            return ICON_ANTENNA_5.replace('</svg>', '<title>Direct RF (0 hops)</title></svg>');
         }
         // RF-relayed (or unknown hop_start)
         var hops = (hopStart && hopLimit != null && hopStart > 0) ? (hopStart - hopLimit) : null;
         var tip = "RF-relayed";
         if (hops != null) tip += " (" + hops + " hop" + (hops !== 1 ? "s" : "") + ")";
         else tip += " (hop count unknown)";
-        return '<svg class="transport-icon transport-rf-relayed" viewBox="0 0 16 16"><title>' + esc(tip) + '</title>' +
-            '<line x1="8" y1="14" x2="8" y2="5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
-            '<circle cx="8" cy="4" r="1.2" fill="currentColor"/>' +
-            '<path d="M5 7a4 4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
-            '</svg>';
+        return ICON_ANTENNA_3.replace('</svg>', '<title>' + esc(tip) + '</title></svg>');
     }
 
     function nodeTransportClass(node) {
@@ -1589,26 +1584,13 @@
     function nodeTransportIcon(node) {
         var cls = nodeTransportClass(node);
         if (cls === "direct_rf") {
-            return '<svg class="transport-icon transport-direct-rf" viewBox="0 0 16 16"><title>Direct RF observed</title>' +
-                '<line x1="8" y1="14" x2="8" y2="5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
-                '<circle cx="8" cy="4" r="1.2" fill="currentColor"/>' +
-                '<path d="M5 7a4 4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
-                '<path d="M3.5 5.5a6.5 6.5 0 0 1 9 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
-                '</svg>';
+            return ICON_ANTENNA_5.replace('</svg>', '<title>Direct RF observed</title></svg>');
         }
         if (cls === "rf_relayed") {
-            return '<svg class="transport-icon transport-rf-relayed" viewBox="0 0 16 16"><title>RF-relayed only (never direct)</title>' +
-                '<line x1="8" y1="14" x2="8" y2="5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
-                '<circle cx="8" cy="4" r="1.2" fill="currentColor"/>' +
-                '<path d="M5 7a4 4 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
-                '</svg>';
+            return ICON_ANTENNA_3.replace('</svg>', '<title>RF-relayed only (never direct)</title></svg>');
         }
         if (cls === "mqtt_only") {
-            return '<svg class="transport-icon transport-mqtt" viewBox="0 0 16 16"><title>MQTT only (never heard over RF)</title>' +
-                '<path d="M4.5 11C2.6 11 1 9.7 1 8s1.6-3 3.5-3c.4-1.7 2-3 3.8-3 1.5 0 2.8.8 3.4 2 .2 0 .5-.1.8-.1C14.4 3.9 16 5.3 16 7s-1.6 3.1-3.5 3.1" ' +
-                'fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>' +
-                '<path d="M4 13h8" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.4"/>' +
-                '</svg>';
+            return ICON_CLOUD_SHARE.replace('</svg>', '<title>MQTT only (never heard over RF)</title></svg>');
         }
         return "";
     }

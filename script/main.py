@@ -139,16 +139,24 @@ def handle_packet(pkt = None):
 
         message = packet.get_message()
 
+        # Handle cases where message parsing fails or returns incomplete data
+        if message is None:
+            print("[WARN] Failed to parse message from decrypted packet")
+            print("-" * 50)
+            return
+
+        msg_type = getattr(message, 'type', 'UNKNOWN')
+        msg_data = getattr(message, 'data', None)
+
         # Upsert node info before resolving names so the name is immediately available
-        if message.type == "NODEINFO_APP" and isinstance(message.data, dict):
-            info = message.data
+        if msg_type == "NODEINFO_APP" and isinstance(msg_data, dict):
             upsert_node(
                 node_id=packet.get_source(),
-                long_name=info.get("long_name"),
-                short_name=info.get("short_name"),
-                hw_model=info.get("hw_model"),
-                role=info.get("role"),
-                public_key=info.get("public_key"),
+                long_name=msg_data.get("long_name"),
+                short_name=msg_data.get("short_name"),
+                hw_model=msg_data.get("hw_model"),
+                role=msg_data.get("role"),
+                public_key=msg_data.get("public_key"),
                 timestamp=packet.get_timestamp(),
             )
 
@@ -166,18 +174,22 @@ def handle_packet(pkt = None):
             channel_hash=pkt_hash,
             channel_name=channel_name,
             port_num=getattr(message, 'portnum', None),
-            msg_type=message.type,
-            data=getattr(message, 'data', None),
+            msg_type=msg_type,
+            data=msg_data,
             key_used=encryption_type,
             via_mqtt=via_mqtt,
             hop_start=hop_start,
             hop_limit=hop_limit,
         )
 
-        message_json = message.to_json()
-        if isinstance(message_json, str):
-            message_json = json.loads(message_json)
-        print("message:", json.dumps(message_json, indent=2))
+        try:
+            message_json = message.to_json()
+            if isinstance(message_json, str):
+                message_json = json.loads(message_json)
+            print("message:", json.dumps(message_json, indent=2))
+        except Exception as e:
+            print(f"[WARN] Failed to serialize message: {e}")
+            print(f"message: (type={msg_type}, data={msg_data})")
     else:
         print("[WARN] no suitable key!")
 
@@ -199,7 +211,13 @@ def listen_on_network(ip = None, port = None, keys = []):
     while True:
         if socket.poll(10) != 0:
             pkt = socket.recv()
-            handle_packet(pkt)
+            try:
+                handle_packet(pkt)
+            except Exception as e:
+                print(f"[ERROR] Failed to process packet: {e}")
+                if debug:
+                    import traceback
+                    traceback.print_exc()
         else:
             time.sleep(0.1)
 
