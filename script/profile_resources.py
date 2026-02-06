@@ -321,11 +321,12 @@ def main():
     except KeyboardInterrupt:
         print("\n\nStopped early by user.")
 
-    # Summary
-    print()
-    print("=" * 60)
-    print("PROFILING SUMMARY")
-    print("=" * 60)
+    # Summary - build as string to write to both stdout and file
+    summary_lines = []
+    summary_lines.append("")
+    summary_lines.append("=" * 60)
+    summary_lines.append("PROFILING SUMMARY")
+    summary_lines.append("=" * 60)
 
     if samples:
         # Calculate averages and peaks
@@ -334,43 +335,54 @@ def main():
         def peak(key):
             return max(s[key] for s in samples)
 
-        print(f"\nDuration: {len(samples) * SAMPLE_INTERVAL / 60:.1f} minutes ({len(samples)} samples)")
-        print(f"\nSystem Resources:")
-        print(f"  CPU:     avg {avg('sys_cpu_percent'):.1f}%  peak {peak('sys_cpu_percent'):.1f}%")
-        print(f"  Memory:  avg {avg('sys_mem_used_mb'):.0f} MB  peak {peak('sys_mem_used_mb'):.0f} MB")
-        print(f"  Load:    avg {avg('load_1m'):.2f}  peak {peak('load_1m'):.2f}")
+        summary_lines.append(f"\nDuration: {len(samples) * SAMPLE_INTERVAL / 60:.1f} minutes ({len(samples)} samples)")
+        summary_lines.append(f"\nSystem Resources:")
+        summary_lines.append(f"  CPU:     avg {avg('sys_cpu_percent'):.1f}%  peak {peak('sys_cpu_percent'):.1f}%")
+        summary_lines.append(f"  Memory:  avg {avg('sys_mem_used_mb'):.0f} MB  peak {peak('sys_mem_used_mb'):.0f} MB")
+        summary_lines.append(f"  Load:    avg {avg('load_1m'):.2f}  peak {peak('load_1m'):.2f}")
 
-        print(f"\nPer-Process Memory (RSS):")
-        print(f"  GNU Radio: avg {avg('gnuradio_rss_mb'):.0f} MB  peak {peak('gnuradio_rss_mb'):.0f} MB")
-        print(f"  Decoder:   avg {avg('decoder_rss_mb'):.0f} MB  peak {peak('decoder_rss_mb'):.0f} MB")
-        print(f"  WebUI:     avg {avg('webui_rss_mb'):.0f} MB  peak {peak('webui_rss_mb'):.0f} MB")
+        summary_lines.append(f"\nPer-Process Memory (RSS):")
+        summary_lines.append(f"  GNU Radio: avg {avg('gnuradio_rss_mb'):.0f} MB  peak {peak('gnuradio_rss_mb'):.0f} MB")
+        summary_lines.append(f"  Decoder:   avg {avg('decoder_rss_mb'):.0f} MB  peak {peak('decoder_rss_mb'):.0f} MB")
+        summary_lines.append(f"  WebUI:     avg {avg('webui_rss_mb'):.0f} MB  peak {peak('webui_rss_mb'):.0f} MB")
 
         total_mem = avg('gnuradio_rss_mb') + avg('decoder_rss_mb') + avg('webui_rss_mb')
-        print(f"  TOTAL:     ~{total_mem:.0f} MB average")
+        summary_lines.append(f"  TOTAL:     ~{total_mem:.0f} MB average")
 
-        print(f"\nDatabase:")
-        print(f"  Final size: {samples[-1]['db_size_mb']:.2f} MB")
+        summary_lines.append(f"\nDatabase:")
+        summary_lines.append(f"  Final size: {samples[-1]['db_size_mb']:.2f} MB")
         if samples[0]['db_size_mb'] > 0:
             growth = samples[-1]['db_size_mb'] - samples[0]['db_size_mb']
-            print(f"  Growth:     {growth:.2f} MB during profiling")
+            summary_lines.append(f"  Growth:     {growth:.2f} MB during profiling")
 
-        print(f"\nRaspberry Pi Recommendation:")
+        summary_lines.append(f"\nRaspberry Pi Recommendation:")
         if total_mem < 400:
-            print(f"  ✓ Pi 4 (2GB) should work for headless operation")
+            summary_lines.append(f"  ✓ Pi 4 (2GB) should work for headless operation")
         elif total_mem < 800:
-            print(f"  ✓ Pi 4 (4GB) recommended")
+            summary_lines.append(f"  ✓ Pi 4 (4GB) recommended")
         else:
-            print(f"  ⚠ Pi 5 (8GB) recommended due to high memory usage")
+            summary_lines.append(f"  ⚠ Pi 5 (8GB) recommended due to high memory usage")
 
         if peak('sys_cpu_percent') < 50:
-            print(f"  ✓ CPU usage is low, any Pi 4/5 should handle it")
+            summary_lines.append(f"  ✓ CPU usage is low, any Pi 4/5 should handle it")
         elif peak('sys_cpu_percent') < 75:
-            print(f"  ✓ Pi 4 should handle this, Pi 5 gives headroom")
+            summary_lines.append(f"  ✓ Pi 4 should handle this, Pi 5 gives headroom")
         else:
-            print(f"  ⚠ High CPU usage - consider reducing decoder chains or use Pi 5")
+            summary_lines.append(f"  ⚠ High CPU usage - consider reducing decoder chains or use Pi 5")
 
-        print(f"\nCSV output: {csv_path}")
+        summary_lines.append(f"\nCSV output: {csv_path}")
 
+        # Write summary to file
+        summary_path = csv_path.with_suffix('.summary.txt')
+        summary_lines.append(f"Summary output: {summary_path}")
+
+        with open(summary_path, 'w') as f:
+            f.write('\n'.join(summary_lines))
+            f.write('\n')
+
+    # Print summary to stdout
+    for line in summary_lines:
+        print(line)
     print()
 
 
